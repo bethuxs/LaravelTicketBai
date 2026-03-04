@@ -30,5 +30,15 @@ class TicketBAIProvider extends ServiceProvider
     public function boot()
     {
         $this->loadMigrationsFrom(__DIR__.'/database');
+        
+        // Publish configuration file
+        $this->publishes([
+            __DIR__.'/config/ticketbai.php' => config_path('ticketbai.php'),
+        ], 'ticketbai-config');
+        
+        // Merge configuration
+        $this->mergeConfigFrom(
+            __DIR__.'/config/ticketbai.php', 'ticketbai'
+        );
     }
 }

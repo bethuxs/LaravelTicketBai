@@ -123,13 +123,34 @@ class TicketBAI
 
         //to do, find previous invoice
         // factura anterior PreviousInvoice;
-        $prev = Invoice::where('issuer', $this->idIssuer)
-                ->orderBy('created_at', 'desc')
+        $issuerColumn = Invoice::getColumnName('issuer');
+        $createdAtColumn = Invoice::getColumnName('created_at');
+        $prev = Invoice::where($issuerColumn, $this->idIssuer)
+                ->orderBy($createdAtColumn, 'desc')
                 ->first();
         $prevInvoice = null;
         if ($prev) {
-            $sentDate = new \Barnetik\Tbai\ValueObject\Date($prev->created_at->format("d-m-Y"));
-            $prevInvoice = new PreviousInvoice($prev->number, $sentDate, $prev->signature, null);
+            $numberColumn = Invoice::getColumnName('number');
+            $signatureColumn = Invoice::getColumnName('signature');
+            $createdAtColumn = Invoice::getColumnName('created_at');
+            
+            // Handle timestamp - if it's a Carbon instance, use it directly, otherwise convert
+            $createdAtValue = $prev->{$createdAtColumn};
+            if ($createdAtValue instanceof \Carbon\Carbon) {
+                $dateString = $createdAtValue->format("d-m-Y");
+            } elseif ($createdAtValue) {
+                $dateString = \Carbon\Carbon::parse($createdAtValue)->format("d-m-Y");
+            } else {
+                $dateString = date("d-m-Y");
+            }
+            
+            $sentDate = new \Barnetik\Tbai\ValueObject\Date($dateString);
+            // Signature is optional - use null if column is not configured or doesn't exist
+            $signatureValue = null;
+            if ($signatureColumn) {
+                $signatureValue = isset($prev->{$signatureColumn}) ? $prev->{$signatureColumn} : null;
+            }
+            $prevInvoice = new PreviousInvoice($prev->{$numberColumn}, $sentDate, $signatureValue, null);
         }
         return new \Barnetik\Tbai\Fingerprint($this->vendor, $prevInvoice);
         
@@ -260,11 +281,22 @@ class TicketBAI
         $model = $this->model;
         \Log::debug($this->signedFilename);
         $disk = Storage::disk($this->disk);
-        $model->path = $disk->putFile('ticketbai', new \Illuminate\Http\File($this->signedFilename));
-        $model->issuer = $this->idIssuer;
-        $model->number = $this->invoiceNumber;
-        $model->signature = $this->ticketbai->signatureValue();
-        $model->data = $this->data;
+        
+        // Use configured column names
+        $pathColumn = Invoice::getColumnName('path');
+        $issuerColumn = Invoice::getColumnName('issuer');
+        $numberColumn = Invoice::getColumnName('number');
+        $signatureColumn = Invoice::getColumnName('signature');
+        $dataColumn = Invoice::getColumnName('data');
+        
+        $model->{$pathColumn} = $disk->putFile('ticketbai', new \Illuminate\Http\File($this->signedFilename));
+        $model->{$issuerColumn} = $this->idIssuer;
+        $model->{$numberColumn} = $this->invoiceNumber;
+        // Signature is optional - only save if column name is configured (not null)
+        if ($signatureColumn) {
+            $model->{$signatureColumn} = $this->ticketbai->signatureValue();
+        }
+        $model->{$dataColumn} = $this->data;
         $model->save();
         $this->clearFile();
         Job\InvoiceSend::dispatch($this);
@@ -273,7 +305,8 @@ class TicketBAI
     function copySignatureOnLocal()
     {
         $disk = Storage::disk($this->disk);
-        file_put_contents($this->signedFilename, $disk->get($this->model->path));
+        $pathColumn = Invoice::getColumnName('path');
+        file_put_contents($this->signedFilename, $disk->get($this->model->{$pathColumn}));
     }
 
     function getModel()

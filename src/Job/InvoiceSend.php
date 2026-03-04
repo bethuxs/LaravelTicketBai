@@ -47,13 +47,15 @@ class InvoiceSend implements ShouldQueue
         try {
             $result = $api->submitInvoice($tbai, $privateKey, $certPassword);
         } catch (\Exception $e) {
-            $data  = file_get_contents($model->path);
+            $pathColumn = Invoice::getColumnName('path');
+            $data  = file_get_contents($model->{$pathColumn});
             $exception = new \Exception("$data\n\n".$e->getMessage());
             $this->fail($exception);
         }
 
         if($result->isCorrect()){
-            $model->sent = date('Y-m-d H:i:s');
+            $sentColumn = Invoice::getColumnName('sent');
+            $model->{$sentColumn} = date('Y-m-d H:i:s');
             $ticketbai->clearFile();
             $model->save();
         } else {
