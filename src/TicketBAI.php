@@ -113,7 +113,7 @@ class TicketBAI
         return $this->invoiceNumber;
     }
 
-    protected function simplyfyHeader(): \Barnetik\Tbai\Invoice\Header
+    protected function simplifyHeader(): \Barnetik\Tbai\Invoice\Header
     {
         $invoiceNumber = $this->getInvoiceNumber();
         $now = new \DateTime();
@@ -162,7 +162,7 @@ class TicketBAI
     public function invoice(string $territory, string $description): string
     {
         $data = $this->getData($description);
-        $header = $this->simplyfyHeader();
+        $header = $this->simplifyHeader();
         $fingerprint = $this->getFingerprint();
 
         $totalInvoice = $this->totalInvoice;

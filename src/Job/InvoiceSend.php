@@ -13,6 +13,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class InvoiceSend implements ShouldQueue
 {
@@ -40,7 +41,8 @@ class InvoiceSend implements ShouldQueue
         } catch (\Throwable $e) {
             if ($model !== null) {
                 $pathColumn = Invoice::getColumnName('path') ?? 'path';
-                $data = file_get_contents($model->{$pathColumn});
+                $diskName = config('services.ticketbai.disk', 'local');
+                $data = Storage::disk($diskName)->get($model->{$pathColumn});
                 $exception = new \Exception($data . "\n\n" . $e->getMessage());
                 $this->fail($exception);
             } else {
