@@ -36,6 +36,13 @@ class TicketBAI
         self::TERRITORY_GIPUZKOA => '03',
     ];
 
+    /** Barnetik code to territory name (accept "01", "02", "03" in addition to names) */
+    private const CODE_TO_TERRITORY = [
+        '01' => self::TERRITORY_ARABA,
+        '02' => self::TERRITORY_BIZKAIA,
+        '03' => self::TERRITORY_GIPUZKOA,
+    ];
+
     protected ?Vendor $vendor = null;
 
     /** @var array<int, \Barnetik\Tbai\Invoice\Data\Detail> */
@@ -191,7 +198,10 @@ class TicketBAI
 
     public function invoice(string $territory, string $description): string
     {
-        $territory = strtoupper($territory);
+        $territory = strtoupper(trim($territory));
+        if (isset(self::CODE_TO_TERRITORY[$territory])) {
+            $territory = self::CODE_TO_TERRITORY[$territory];
+        }
         if (! in_array($territory, self::VALID_TERRITORIES, true)) {
             throw InvalidTerritoryException::for($territory);
         }
@@ -252,7 +262,14 @@ class TicketBAI
         $ticketbai = $this->ticketbai;
         $privateKey = $this->getCertificate();
         $certPassword = $this->certPassword ?? '';
-        $this->signedFilename = storage_path('ticketbai'.$this->invoiceNumber.'.xml');
+        
+        // Ensure ticketbai directory exists
+        $ticketbaiDir = storage_path('invoices/ticketbai');
+        if (!is_dir($ticketbaiDir)) {
+            mkdir($ticketbaiDir, 0755, true);
+        }
+        
+        $this->signedFilename = storage_path('invoices/ticketbai/'.$this->invoiceNumber.'.xml');
         \Illuminate\Support\Facades\Log::debug('Signed file: '.$this->signedFilename);
         $ticketbai->sign($privateKey, $certPassword, $this->signedFilename);
         $qr = new \Barnetik\Tbai\Qr($ticketbai, true);

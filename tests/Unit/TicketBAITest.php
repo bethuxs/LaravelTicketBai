@@ -126,6 +126,27 @@ class TicketBAITest extends TestCase
     }
 
     /** @test */
+    public function it_accepts_territory_code_01_02_03_as_valid(): void
+    {
+        config(['ticketbai.cert_path' => __DIR__.'/../stubs/nonexistent.p12']);
+
+        foreach (['01', '02', '03'] as $code) {
+            $ticketbai = new TicketBAI([]);
+            $ticketbai->setVendor('L', 'B1', 'App', '1.0');
+            $ticketbai->issuer('B12345678', 'Company', 1);
+            $ticketbai->setVat(21);
+            $ticketbai->add('Item', 10.0, 1);
+            try {
+                $ticketbai->invoice($code, 'Test');
+            } catch (CertificateNotFoundException $e) {
+                $this->assertStringContainsString('not found or not readable', $e->getMessage());
+                continue;
+            }
+            $this->fail('Expected CertificateNotFoundException when using territory code '.$code);
+        }
+    }
+
+    /** @test */
     public function it_throws_invalid_territory_exception_for_invalid_territory()
     {
         $this->expectException(InvalidTerritoryException::class);
