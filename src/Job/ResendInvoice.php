@@ -21,7 +21,8 @@ class ResendInvoice implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public function __construct(
-        protected Invoice $invoice
+        protected Invoice $invoice,
+        protected ?string $disk = null
     ) {}
 
     public function handle(TicketBAIService $ticketbaiService): void
@@ -46,7 +47,7 @@ class ResendInvoice implements ShouldQueue
             );
         }
 
-        $diskName = $ticketbaiService->getDisk();
+        $diskName = $this->disk ?? $ticketbaiService->getDisk();
         $xml = Storage::disk($diskName)->get($path);
 
         $tbai = TicketBai::createFromXml($xml, $territory, false);

@@ -20,7 +20,8 @@ class InvoiceSend implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public function __construct(
-        protected TicketBAI $ticketbai
+        protected TicketBAI $ticketbai,
+        protected ?string $disk = null
     ) {}
 
     public function handle(): void
@@ -33,14 +34,14 @@ class InvoiceSend implements ShouldQueue
         $certPassword = $ticketbai->getCertPassword();
         $debug = config('app.debug');
         $test = ! App::environment('production');
-        $api = \Barnetik\Tbai\Api::createForTicketBai($tbai, $test, $debug);
+        $api = $this->createApi($tbai, $test, $debug);
 
         try {
             $result = $api->submitInvoice($tbai, $privateKey, $certPassword ?? '');
         } catch (\Throwable $e) {
             if ($model !== null) {
                 $pathColumn = Invoice::getColumnName('path') ?? 'path';
-                $diskName = $ticketbai->getDisk();
+                $diskName = $this->disk ?? $ticketbai->getDisk();
                 $xmlContent = Storage::disk($diskName)->get($model->{$pathColumn});
                 Log::error('TicketBAI invoice send failed. XML content logged.', [
                     'invoice_number' => $model->{Invoice::getColumnName('number') ?? 'number'},
@@ -71,5 +72,13 @@ class InvoiceSend implements ShouldQueue
             $info = $result->content();
             Log::error($info);
         }
+    }
+
+    /**
+     * Create the TicketBAI API instance. Override in tests to inject a mock.
+     */
+    protected function createApi(\Barnetik\Tbai\TicketBai $tbai, bool $test, bool $debug): \Barnetik\Tbai\Api
+    {
+        return \Barnetik\Tbai\Api::createForTicketBai($tbai, $test, $debug);
     }
 }

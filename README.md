@@ -207,33 +207,27 @@ The library supports flexible table and column configuration, allowing you to us
 
 ### Default Table Structure
 
-The default migration creates an `invoices` table with:
-
-- `id` - Primary key
-- `path` - File path of signed XML (required)
-- `issuer` - Issuer ID (required)
-- `number` - Invoice number (required)
-- `signature` - TicketBAI signature (optional)
-- `data` - Additional JSON data (optional)
-- `status` - Status field
-- `sent` - Timestamp when invoice was sent
-- `created_at`, `updated_at` - Timestamps
+The default migration creates an `invoices` table with columns `issuer`, `number`, `path`, `signature`, `data`, `sent`, etc. **The config defaults in `config/ticketbai.php` match this table.** If you use the default migration, you do not need to set column env vars.
 
 ### Custom Table Configuration
 
-If you have a different table structure, configure column mappings in `config/ticketbai.php`:
+If you use **your own table** with different column names (e.g. `transaction_id` instead of `issuer`, `provider_reference` instead of `number`), override the mappings via environment variables so the library knows where to store each value. Example: `TICKETBAI_COLUMN_ISSUER=transaction_id`, `TICKETBAI_COLUMN_NUMBER=provider_reference`, `TICKETBAI_COLUMN_SENT=attempted_at`.
+
+Configure column mappings in `config/ticketbai.php`:
 
 ```php
 'table' => [
     'name' => env('TICKETBAI_TABLE_NAME', 'invoices'),
-    
     'columns' => [
-        'issuer' => env('TICKETBAI_COLUMN_ISSUER', 'transaction_id'),
-        'number' => env('TICKETBAI_COLUMN_NUMBER', 'provider_reference'),
-        'signature' => env('TICKETBAI_COLUMN_SIGNATURE', null), // Optional
+        // Defaults match the default migration. For your own table use env, e.g.:
+        // TICKETBAI_COLUMN_ISSUER=transaction_id, TICKETBAI_COLUMN_NUMBER=provider_reference
+        'issuer' => env('TICKETBAI_COLUMN_ISSUER', 'issuer'),
+        'number' => env('TICKETBAI_COLUMN_NUMBER', 'number'),
+        'territory' => env('TICKETBAI_COLUMN_TERRITORY', 'territory'),
+        'signature' => env('TICKETBAI_COLUMN_SIGNATURE', 'signature'),
         'path' => env('TICKETBAI_COLUMN_PATH', 'path'),
-        'data' => env('TICKETBAI_COLUMN_DATA', null), // Optional
-        'sent' => env('TICKETBAI_COLUMN_SENT', 'attempted_at'),
+        'data' => env('TICKETBAI_COLUMN_DATA', 'data'),
+        'sent' => env('TICKETBAI_COLUMN_SENT', 'sent'),
         'created_at' => env('TICKETBAI_COLUMN_CREATED_AT', 'created_at'),
         'updated_at' => env('TICKETBAI_COLUMN_UPDATED_AT', 'updated_at'),
     ],
@@ -242,13 +236,16 @@ If you have a different table structure, configure column mappings in `config/ti
 
 ### Environment Variables for Column Mapping
 
+Use these only when you have a **custom table** with different column names:
+
 ```env
 TICKETBAI_TABLE_NAME=invoices
 TICKETBAI_COLUMN_ISSUER=transaction_id
 TICKETBAI_COLUMN_NUMBER=provider_reference
-TICKETBAI_COLUMN_SIGNATURE=  # Leave empty to disable
+TICKETBAI_COLUMN_TERRITORY=territory
+TICKETBAI_COLUMN_SIGNATURE=signature
 TICKETBAI_COLUMN_PATH=path
-TICKETBAI_COLUMN_DATA=  # Leave empty to disable
+TICKETBAI_COLUMN_DATA=data
 TICKETBAI_COLUMN_SENT=attempted_at
 TICKETBAI_COLUMN_CREATED_AT=created_at
 TICKETBAI_COLUMN_UPDATED_AT=updated_at
