@@ -1,7 +1,9 @@
 <?php
 namespace EBethus\LaravelTicketBAI\Facade;
 
-class TicketBAI
+use Illuminate\Support\Facades\Facade;
+
+class TicketBAI extends Facade
 {
     /**
      * Get the registered name of the component.
@@ -10,6 +12,6 @@ class TicketBAI
      */
     protected static function getFacadeAccessor()
     {
-        return \EBethus\LaravelTicketBAI::class;
+        return 'ticketbai';
     }
 }

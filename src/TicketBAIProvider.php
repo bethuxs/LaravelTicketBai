@@ -12,9 +12,10 @@ class TicketBAIProvider extends ServiceProvider
      */
     public function register()
     {
-        $this->app->singleton('ticketbai', function ($app) {
+        $this->app->singleton(TicketBAI::class, function ($app) {
             return new TicketBAI(config('services.ticketbai'));
         });
+        $this->app->alias(TicketBAI::class, 'ticketbai');
     }
 
     /**
@@ -24,7 +25,7 @@ class TicketBAIProvider extends ServiceProvider
      */
     public function provides()
     {
-        return [TicketBAI::class];
+        return ['ticketbai', TicketBAI::class];
     }
 
     public function boot()
