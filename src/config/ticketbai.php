@@ -47,8 +47,10 @@ return [
             // This stores the file path of the signed XML
             'path' => env('TICKETBAI_COLUMN_PATH', 'path'),
             
-            // Data column - you may map this to 'message' or add a 'data' JSON column
-            'data' => env('TICKETBAI_COLUMN_DATA', 'data'),
+            // Data column - OPTIONAL, can be null or omitted if you don't need to store extra data
+            // This stores additional JSON data passed via the data() method
+            // Set to null or empty string to disable data storage
+            'data' => env('TICKETBAI_COLUMN_DATA', null),
             
             // Sent timestamp - you may map this to 'attempted_at' or add a 'sent' column
             'sent' => env('TICKETBAI_COLUMN_SENT', 'attempted_at'),

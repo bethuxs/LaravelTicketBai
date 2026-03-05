@@ -301,8 +301,8 @@ class TicketBAI
             $attributes[$signatureColumn] = $this->ticketbai->signatureValue();
         }
         
-        // Data column
-        if ($dataColumn) {
+        // Data column is optional - only add if column name is configured and data is not null
+        if ($dataColumn !== null && $dataColumn !== '' && $this->data !== null) {
             $attributes[$dataColumn] = $this->data;
         }
         
