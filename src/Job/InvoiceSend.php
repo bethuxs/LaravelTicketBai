@@ -9,8 +9,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
 use EBethus\LaravelTicketBAI\Invoice;
-
-use \EBethus\LaravelTicketBAI\TicketBai;
+use EBethus\LaravelTicketBAI\TicketBAI;
 
 class InvoiceSend implements ShouldQueue
 {
@@ -36,14 +35,14 @@ class InvoiceSend implements ShouldQueue
     public function handle()
     {
         $ticketbai = $this->ticketbai;
-        $model = $ticketbai->copySignatureOnLocal();
+        $ticketbai->copySignatureOnLocal();
+        $model = $ticketbai->getModel();
         $tbai = $ticketbai->getTBAI();
         $privateKey = $ticketbai->getCertificate();
         $certPassword = $ticketbai->getCertPassword();
         $debug = config('app.debug');
         $test = !\App::environment('production');
         $api = \Barnetik\Tbai\Api::createForTicketBai($tbai, $test, $debug);
-        $model = $ticketbai->getModel();
         try {
             $result = $api->submitInvoice($tbai, $privateKey, $certPassword);
         } catch (\Exception $e) {
