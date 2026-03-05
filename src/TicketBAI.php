@@ -2,6 +2,7 @@
 namespace EBethus\LaravelTicketBAI;
 
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 use \Barnetik\Tbai\Invoice\Breakdown\NationalSubjectNotExemptBreakdownItem;
 
@@ -167,7 +168,7 @@ class TicketBAI
 
     protected function getInvoiceNumber()
     {
-        $this->invoiceNumber = (string)time();
+        $this->invoiceNumber = (string) Str::ulid();
         return $this->invoiceNumber;
     }
 
@@ -216,7 +217,7 @@ class TicketBAI
         $unitAmount = new Amount($unitPrice*(100-$this->vatPerc)/100, 12, 8);
         $quantity = new Amount($q);
         $disc = $discount ? new Amount($discount) : null ;
-        $total =  new Amount($unitPrice * $q - $discount ?? 0);
+        $total =  new Amount($unitPrice * $q - ($discount ?? 0));
         $this->items[] = new \Barnetik\Tbai\Invoice\Data\Detail($desc, $unitAmount,  $quantity, $total, $disc);
     }
 
