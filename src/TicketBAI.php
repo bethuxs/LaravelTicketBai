@@ -289,14 +289,25 @@ class TicketBAI
         $signatureColumn = Invoice::getColumnName('signature');
         $dataColumn = Invoice::getColumnName('data');
         
-        $model->{$pathColumn} = $disk->putFile('ticketbai', new \Illuminate\Http\File($this->signedFilename));
-        $model->{$issuerColumn} = $this->idIssuer;
-        $model->{$numberColumn} = $this->invoiceNumber;
-        // Signature is optional - only save if column name is configured (not null)
-        if ($signatureColumn) {
-            $model->{$signatureColumn} = $this->ticketbai->signatureValue();
+        // Build attributes array - only include columns that are configured (not null)
+        $attributes = [
+            $pathColumn => $disk->putFile('ticketbai', new \Illuminate\Http\File($this->signedFilename)),
+            $issuerColumn => $this->idIssuer,
+            $numberColumn => $this->invoiceNumber,
+        ];
+        
+        // Signature is optional - only add if column name is configured (not null)
+        if ($signatureColumn !== null && $signatureColumn !== '') {
+            $attributes[$signatureColumn] = $this->ticketbai->signatureValue();
         }
-        $model->{$dataColumn} = $this->data;
+        
+        // Data column
+        if ($dataColumn) {
+            $attributes[$dataColumn] = $this->data;
+        }
+        
+        // Set all attributes at once
+        $model->fill($attributes);
         $model->save();
         $this->clearFile();
         Job\InvoiceSend::dispatch($this);

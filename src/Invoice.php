@@ -16,6 +16,14 @@ class Invoice extends Model
     ];
 
     /**
+     * Allow mass assignment for all attributes
+     * Since column names are dynamic, we can't use $fillable
+     *
+     * @var array
+     */
+    protected $guarded = [];
+
+    /**
      * Get the table name from configuration
      *
      * @return string
@@ -35,6 +43,12 @@ class Invoice extends Model
     public static function getColumnName($internalColumn)
     {
         $columns = config('ticketbai.table.columns', []);
+        
+        // For signature, default to null if not configured
+        if ($internalColumn === 'signature' && !isset($columns[$internalColumn])) {
+            return null;
+        }
+        
         $columnName = $columns[$internalColumn] ?? $internalColumn;
         // Return null if column is explicitly set to null or empty string
         return ($columnName === null || $columnName === '') ? null : $columnName;
