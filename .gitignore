@@ -11,4 +11,5 @@ Thumbs.db
 .env.backup
 .env.production
 .phpunit.result.cache
-coverage/
+coverage/.phpunit.cache/
+phpunit.xml.bak

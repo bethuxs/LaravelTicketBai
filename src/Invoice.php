@@ -1,65 +1,60 @@
 <?php
+
+declare(strict_types=1);
+
 namespace EBethus\LaravelTicketBAI;
 
 use Illuminate\Database\Eloquent\Model;
-
 
 class Invoice extends Model
 {
     /**
      * The attributes that should be cast to native types.
      *
-     * @var array
+     * @var array<string, string>
      */
     protected $casts = [
         'data' => 'json',
     ];
 
     /**
-     * Allow mass assignment for all attributes
-     * Since column names are dynamic, we can't use $fillable
+     * Allow mass assignment for all attributes.
+     * Since column names are dynamic, we can't use $fillable.
      *
-     * @var array
+     * @var array<int, string>
      */
     protected $guarded = [];
 
     /**
-     * Get the table name from configuration
-     *
-     * @return string
+     * Get the table name from configuration.
      */
-    public function getTable()
+    public function getTable(): string
     {
         $tableName = config('ticketbai.table.name', 'invoices');
         return $tableName ?: 'invoices';
     }
 
     /**
-     * Get the column name for a given internal column
-     *
-     * @param string $internalColumn
-     * @return string
+     * Get the column name for a given internal column.
      */
-    public static function getColumnName($internalColumn)
+    public static function getColumnName(string $internalColumn): ?string
     {
         $columns = config('ticketbai.table.columns', []);
-        
-        // For signature and data, default to null if not configured
-        if (in_array($internalColumn, ['signature', 'data']) && !isset($columns[$internalColumn])) {
+
+        if (in_array($internalColumn, ['signature', 'data'], true) && !isset($columns[$internalColumn])) {
             return null;
         }
-        
+
         $columnName = $columns[$internalColumn] ?? $internalColumn;
-        // Return null if column is explicitly set to null or empty string
         return ($columnName === null || $columnName === '') ? null : $columnName;
     }
 
     /**
-     * Get all column mappings
+     * Get all column mappings.
      *
-     * @return array
+     * @return array<string, string|null>
      */
-    public static function getColumnMappings()
+    public static function getColumnMappings(): array
     {
         return config('ticketbai.table.columns', []);
     }

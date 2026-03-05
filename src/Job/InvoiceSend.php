@@ -1,38 +1,29 @@
 <?php
+
+declare(strict_types=1);
+
 namespace EBethus\LaravelTicketBAI\Job;
 
+use EBethus\LaravelTicketBAI\Invoice;
+use EBethus\LaravelTicketBAI\TicketBAI;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-
-use EBethus\LaravelTicketBAI\Invoice;
-use EBethus\LaravelTicketBAI\TicketBAI;
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Log;
 
 class InvoiceSend implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    protected $ticketbai;
-
-    /**
-     * Create a new job instance.
-     *
-     * @return void
-     */
-    public function __construct(TicketBAI $ticketbai)
-    {
-        $this->ticketbai = $ticketbai;
+    public function __construct(
+        protected TicketBAI $ticketbai
+    ) {
     }
 
-    /**
-     * Execute the job.
-     *
-     * @return void
-     */
-    public function handle()
+    public function handle(): void
     {
         $ticketbai = $this->ticketbai;
         $ticketbai->copySignatureOnLocal();
@@ -41,25 +32,31 @@ class InvoiceSend implements ShouldQueue
         $privateKey = $ticketbai->getCertificate();
         $certPassword = $ticketbai->getCertPassword();
         $debug = config('app.debug');
-        $test = !\App::environment('production');
+        $test = !App::environment('production');
         $api = \Barnetik\Tbai\Api::createForTicketBai($tbai, $test, $debug);
+
         try {
-            $result = $api->submitInvoice($tbai, $privateKey, $certPassword);
-        } catch (\Exception $e) {
-            $pathColumn = Invoice::getColumnName('path');
-            $data  = file_get_contents($model->{$pathColumn});
-            $exception = new \Exception("$data\n\n".$e->getMessage());
-            $this->fail($exception);
+            $result = $api->submitInvoice($tbai, $privateKey, $certPassword ?? '');
+        } catch (\Throwable $e) {
+            if ($model !== null) {
+                $pathColumn = Invoice::getColumnName('path') ?? 'path';
+                $data = file_get_contents($model->{$pathColumn});
+                $exception = new \Exception($data . "\n\n" . $e->getMessage());
+                $this->fail($exception);
+            } else {
+                $this->fail($e);
+            }
+            return;
         }
 
-        if($result->isCorrect()){
-            $sentColumn = Invoice::getColumnName('sent');
+        if ($result->isCorrect() && $model !== null) {
+            $sentColumn = Invoice::getColumnName('sent') ?? 'sent';
             $model->{$sentColumn} = date('Y-m-d H:i:s');
             $ticketbai->clearFile();
             $model->save();
         } else {
             $info = $result->content();
-            \Log::error($info);
+            Log::error($info);
         }
     }
 }

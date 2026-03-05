@@ -3,6 +3,7 @@
     "description": "TicketBai Library for Laravel",
     "type": "library",
     "require": {
+        "php": "^8.2",
         "barnetik/ticketbai": "dev-main",
         "simplesoftwareio/simple-qrcode": "4.2"
     },

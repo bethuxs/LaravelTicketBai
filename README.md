@@ -1,7 +1,7 @@
 # Laravel TicketBAI
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP Version](https://img.shields.io/badge/php-%3E%3D7.4-blue.svg)](https://www.php.net/)
+[![PHP Version](https://img.shields.io/badge/php-%3E%3D8.2-blue.svg)](https://www.php.net/)
 
 A Laravel package for generating and submitting TicketBAI (Ticket BAI) invoices for the Basque Country (Euskadi), Spain. This package provides a flexible and configurable solution for integrating TicketBAI compliance into your Laravel application.
 
@@ -33,7 +33,7 @@ A Laravel package for generating and submitting TicketBAI (Ticket BAI) invoices 
 
 ## Requirements
 
-- PHP >= 7.4
+- PHP >= 8.2
 - Laravel >= 8.0
 - [barnetik/ticketbai](https://github.com/barnetik/ticketbai) package
 - X.509 certificate (.p12 file) for signing invoices
@@ -95,11 +95,14 @@ TICKETBAI_APP_NAME=My Application
 TICKETBAI_APP_VERSION=1.0
 TICKETBAI_CERT_PASSWORD=your_certificate_password
 TICKETBAI_DISK=local
+TICKETBAI_CERT_PATH=certificado.p12
 ```
+
+Use `TICKETBAI_CERT_PATH` to override the certificate path. It can be a path relative to `storage_path()` (e.g. `certificado.p12` for `storage/certificado.p12`) or an absolute path (e.g. `/etc/certs/ticketbai.p12` on Linux).
 
 ### Certificate Setup
 
-Place your X.509 certificate file (`.p12`) in `storage/certificado.p12`. The certificate is used to sign invoices before submission.
+By default the package looks for the X.509 certificate (`.p12`) at `storage/certificado.p12`. Set `TICKETBAI_CERT_PATH` in your `.env` to use a different path (relative to `storage_path()` or absolute). The certificate is used to sign invoices before submission.
 
 ## Usage
 

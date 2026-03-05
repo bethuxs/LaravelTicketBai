@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace EBethus\LaravelTicketBAI\Tests\Unit;
 
 use EBethus\LaravelTicketBAI\TicketBAI;
@@ -81,10 +83,9 @@ class TicketBAITest extends TestCase
     }
 
     /** @test */
-    public function it_throws_exception_when_adding_item_with_invalid_price()
+    public function it_throws_exception_when_adding_item_with_invalid_price(): void
     {
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Unit price and quantity must be numeric');
+        $this->expectException(\TypeError::class);
 
         $ticketbai = new TicketBAI([]);
         $ticketbai->setVat(21);

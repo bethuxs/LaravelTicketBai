@@ -12,6 +12,11 @@ return [
     |
     */
 
+    /*
+    | Certificate path: relative to storage_path() or absolute. E.g. 'certificado.p12' or '/etc/certs/ticketbai.p12'
+    */
+    'cert_path' => env('TICKETBAI_CERT_PATH', 'certificado.p12'),
+
     'table' => [
         'name' => env('TICKETBAI_TABLE_NAME', 'invoices'),
         

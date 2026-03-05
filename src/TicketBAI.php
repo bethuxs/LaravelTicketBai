@@ -1,103 +1,50 @@
 <?php
+
+declare(strict_types=1);
+
 namespace EBethus\LaravelTicketBAI;
 
+use Barnetik\Tbai\Fingerprint\Vendor;
+use Barnetik\Tbai\Fingerprint\PreviousInvoice;
+use Barnetik\Tbai\Invoice\Breakdown\NationalSubjectNotExemptBreakdownItem;
+use Barnetik\Tbai\Invoice\Data;
+use Barnetik\Tbai\Subject;
+use Barnetik\Tbai\ValueObject\Amount;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
-use \Barnetik\Tbai\Invoice\Breakdown\NationalSubjectNotExemptBreakdownItem;
-
-use \Barnetik\Tbai\Fingerprint\Vendor;
-use \Barnetik\Tbai\Subject;
-use \Barnetik\Tbai\ValueObject\Amount;
-use \Barnetik\Tbai\Invoice\Data;
-use \Barnetik\Tbai\Fingerprint\PreviousInvoice;
-
 class TicketBAI
 {
-    /**
-     * Save the vendor
-     * @var Vendor
-     */
-    protected $vendor;
+    protected ?Vendor $vendor = null;
 
-    protected $items = [];
+    /** @var array<int, \Barnetik\Tbai\Invoice\Data\Detail> */
+    protected array $items = [];
 
-    /**
-     * Certificate's Password
-     * @var string
-     */
-    protected $certPassword;
+    protected ?string $certPassword = null;
 
-    /**
-     * Certificate's path
-     * @var string
-     */
-    protected $certFile;
+    protected ?string $signedFilename = null;
 
-    /**
-     * Path of the signed file
-     * @var string
-     */
-    protected $signedFilename;
+    protected ?string $disk = null;
 
-    /**
-     * Disk for storage
-     * @var string
-     */
-    protected $disk = null;
+    protected ?string $invoiceNumber = null;
 
-    /**
-     * Number of the invoice
-     * @var string
-     */
-    protected $invoiceNumber;
+    protected ?int $idIssuer = null;
 
-    /**
-     * id of issuer
-     * @var integer
-     */
-    protected $idIssuer;
+    protected ?float $totalInvoice = null;
 
-    /**
-     * Total amount of invoice
-     * @var float
-     */
-    protected $totalInvoice;
+    protected ?Invoice $model = null;
 
-    /**
-     * Invoice record
-     * @var Invoice
-     */
-    protected $model;
+    protected ?Subject $subject = null;
 
-    /**
-     * Invoice's subject
-     * @var Subject
-     */
-    protected $subject;
+    protected ?\Barnetik\Tbai\TicketBai $ticketbai = null;
 
-    /**
-     * TicketBAI object
-     * @var \Barnetik\Tbai\TicketBai
-     */
-    protected $ticketbai;
+    protected ?float $vatPerc = null;
 
-    /**
-     * VAT percentage
-     * @var float
-     */
-    protected $vatPerc;
-
-    /**
-     * Data extra of the invoice
-     * @var Data
-     */
-
-    protected $data = null;
+    protected mixed $data = null;
 
     public function __construct(array $config = [])
     {
-        if (!empty($config)) {
+        if ($config !== []) {
             $license = $config['license'];
             $nif = $config['nif'];
             $appName = $config['appName'];
@@ -105,239 +52,235 @@ class TicketBAI
             $this->certPassword = $config['certPassword'];
             $this->setVendor($license, $nif, $appName, $appVersion);
 
-            if ($config['disk']) {
+            if (!empty($config['disk'])) {
                 $this->disk = $config['disk'];
             }
         }
     }
 
-    public function setVendor($license, $nif, $appName, $appVersion)
+    public function setVendor(string $license, string $nif, string $appName, string $appVersion): void
     {
         $this->vendor = new Vendor($license, $nif, $appName, $appVersion);
     }
 
-    protected function getFingerprint()
+    protected function getFingerprint(): \Barnetik\Tbai\Fingerprint
     {
-        if (!$this->vendor) {
+        if ($this->vendor === null) {
             throw new \RuntimeException('Vendor not set');
         }
 
-        //to do, find previous invoice
-        // factura anterior PreviousInvoice;
         $issuerColumn = Invoice::getColumnName('issuer');
         $createdAtColumn = Invoice::getColumnName('created_at');
         $prev = Invoice::where($issuerColumn, $this->idIssuer)
-                ->orderBy($createdAtColumn, 'desc')
-                ->first();
+            ->orderBy($createdAtColumn, 'desc')
+            ->first();
+
         $prevInvoice = null;
-        if ($prev) {
+        if ($prev !== null) {
             $numberColumn = Invoice::getColumnName('number');
             $signatureColumn = Invoice::getColumnName('signature');
-            $createdAtColumn = Invoice::getColumnName('created_at');
-            
-            // Handle timestamp - if it's a Carbon instance, use it directly, otherwise convert
             $createdAtValue = $prev->{$createdAtColumn};
             if ($createdAtValue instanceof \Carbon\Carbon) {
-                $dateString = $createdAtValue->format("d-m-Y");
-            } elseif ($createdAtValue) {
-                $dateString = \Carbon\Carbon::parse($createdAtValue)->format("d-m-Y");
+                $dateString = $createdAtValue->format('d-m-Y');
+            } elseif ($createdAtValue !== null && $createdAtValue !== '') {
+                $dateString = \Carbon\Carbon::parse($createdAtValue)->format('d-m-Y');
             } else {
-                $dateString = date("d-m-Y");
+                $dateString = date('d-m-Y');
             }
-            
+
             $sentDate = new \Barnetik\Tbai\ValueObject\Date($dateString);
-            // Signature is optional - use null if column is not configured or doesn't exist
             $signatureValue = null;
-            if ($signatureColumn) {
-                $signatureValue = isset($prev->{$signatureColumn}) ? $prev->{$signatureColumn} : null;
+            if ($signatureColumn !== null) {
+                $signatureValue = $prev->{$signatureColumn} ?? null;
             }
             $prevInvoice = new PreviousInvoice($prev->{$numberColumn}, $sentDate, $signatureValue, null);
         }
+
         return new \Barnetik\Tbai\Fingerprint($this->vendor, $prevInvoice);
-        
     }
 
-    public function issuer($nif, $name, $idIssuer, $serie = '')
+    public function issuer(string $nif, string $name, int $idIssuer, string $serie = ''): void
     {
         $this->idIssuer = $idIssuer;
         $issuer = new \Barnetik\Tbai\Subject\Issuer(new \Barnetik\Tbai\ValueObject\VatId($nif), $name);
-        // simplyfy invoice
         $recipient = null;
-        $this->subject = new \Barnetik\Tbai\Subject($issuer, $recipient, \Barnetik\Tbai\Subject::ISSUED_BY_THIRD_PARTY);
+        $this->subject = new Subject($issuer, $recipient, Subject::ISSUED_BY_THIRD_PARTY);
     }
 
-    protected function getInvoiceNumber()
+    protected function getInvoiceNumber(): string
     {
         $this->invoiceNumber = (string) Str::ulid();
         return $this->invoiceNumber;
     }
 
-    protected function simplyfyHeader()
+    protected function simplyfyHeader(): \Barnetik\Tbai\Invoice\Header
     {
-        $serie = '';
-        $invoiceNumber =  $this->getInvoiceNumber();
-        $now = new \Datetime();
+        $invoiceNumber = $this->getInvoiceNumber();
+        $now = new \DateTime();
         $date = new \Barnetik\Tbai\ValueObject\Date($now->format('d-m-Y'));
         $time = new \Barnetik\Tbai\ValueObject\Time($now->format('H:i:s'));
-        return \Barnetik\Tbai\Invoice\Header::createSimplified($invoiceNumber, $date, $time, $serie);
+        return \Barnetik\Tbai\Invoice\Header::createSimplified($invoiceNumber, $date, $time, '');
     }
 
-    protected function getData($description)
+    protected function getData(string $description): Data
     {
-        if(empty($this->items)) {
+        if ($this->items === []) {
             throw new \RuntimeException('Not item present');
         }
-        $this->totalInvoice = array_reduce($this->items, function($a, $i){
-            $amount = $i->toArray();
-            return $a + (float) $amount['totalAmount'];
-        }, 0);
-        // TODO Fixec concept
-        $data = new Data($description, new Amount($this->totalInvoice), [Data::VAT_REGIME_01]);
-        foreach($this->items as $i){
+        $this->totalInvoice = array_reduce(
+            $this->items,
+            function (float $a, $i): float {
+                $amount = $i->toArray();
+                return $a + (float) $amount['totalAmount'];
+            },
+            0.0
+        );
+        $data = new Data($description, new Amount((string) $this->totalInvoice), [Data::VAT_REGIME_01]);
+        foreach ($this->items as $i) {
             $data->addDetail($i);
         }
         return $data;
     }
 
-    function setVat($vatPerc)
+    public function setVat(float $vatPerc): void
     {
         $this->vatPerc = $vatPerc;
     }
 
-    function add($desc, $unitPrice, $q, $discount = null)
+    public function add(string $desc, float $unitPrice, float $q, ?float $discount = null): void
     {
-        if (!is_numeric($unitPrice) || !is_numeric($q)) {
-            throw new \RuntimeException('Unit price and quantity must be numeric');
-        }
-        
-        if($this->vatPerc === null) {
+        if ($this->vatPerc === null) {
             throw new \RuntimeException('VAT percentage not set');
         }
-        // debo colocar el valor sin IVA
-        $unitAmount = new Amount($unitPrice*(100-$this->vatPerc)/100, 12, 8);
-        $quantity = new Amount($q);
-        $disc = $discount ? new Amount($discount) : null ;
-        $total =  new Amount($unitPrice * $q - ($discount ?? 0));
-        $this->items[] = new \Barnetik\Tbai\Invoice\Data\Detail($desc, $unitAmount,  $quantity, $total, $disc);
+        $unitAmount = new Amount((string) ($unitPrice * (100 - $this->vatPerc) / 100), 12, 8);
+        $quantity = new Amount((string) $q);
+        $disc = $discount !== null ? new Amount((string) $discount) : null;
+        $total = new Amount((string) ($unitPrice * $q - ($discount ?? 0)));
+        $this->items[] = new \Barnetik\Tbai\Invoice\Data\Detail($desc, $unitAmount, $quantity, $total, $disc);
     }
 
-    function invoice($territory, $description)
+    public function invoice(string $territory, string $description): string
     {
         $data = $this->getData($description);
         $header = $this->simplyfyHeader();
         $fingerprint = $this->getFingerprint();
 
         $totalInvoice = $this->totalInvoice;
-        $vat = new Amount($this->vatPerc);
-        $totalWithOutVat = $totalInvoice*(100-$this->vatPerc)/100;
+        $vat = new Amount((string) $this->vatPerc);
+        $totalWithOutVat = $totalInvoice * (100 - $this->vatPerc) / 100;
         $vatDetail = new \Barnetik\Tbai\Invoice\Breakdown\VatDetail(
-            new Amount($totalWithOutVat),
+            new Amount((string) $totalWithOutVat),
             $vat,
-            new Amount($totalInvoice - $totalWithOutVat)
+            new Amount((string) ($totalInvoice - $totalWithOutVat))
         );
-        $notExemptBreakdown = new NationalSubjectNotExemptBreakdownItem(NationalSubjectNotExemptBreakdownItem::NOT_EXEMPT_TYPE_S1, [$vatDetail]);
+        $notExemptBreakdown = new NationalSubjectNotExemptBreakdownItem(
+            NationalSubjectNotExemptBreakdownItem::NOT_EXEMPT_TYPE_S1,
+            [$vatDetail]
+        );
         $breakdown = new \Barnetik\Tbai\Invoice\Breakdown();
         $breakdown->addNationalSubjectNotExemptBreakdownItem($notExemptBreakdown);
         $invoice = new \Barnetik\Tbai\Invoice($header, $data, $breakdown);
-        $selfEmployed = false;
 
         $this->ticketbai = new \Barnetik\Tbai\TicketBai(
             $this->subject,
             $invoice,
             $fingerprint,
             $territory,
-            $selfEmployed
+            false
         );
 
         return $this->sign();
     }
 
-    function getCertificate()
+    public function getCertificate(): \Barnetik\Tbai\PrivateKey
     {
-        $certFile = storage_path('certificado.p12');
+        $path = config('ticketbai.cert_path', 'certificado.p12');
+        $certFile = (is_string($path) && $path !== '' && (str_starts_with($path, '/') || (DIRECTORY_SEPARATOR === '\\' && strlen($path) >= 2 && $path[1] === ':')))
+            ? $path
+            : storage_path($path);
         return \Barnetik\Tbai\PrivateKey::p12($certFile);
     }
 
-    function getCertPassword()
+    public function getCertPassword(): ?string
     {
         return $this->certPassword;
     }
 
-    protected function sign()
+    protected function sign(): string
     {
         $ticketbai = $this->ticketbai;
         $privateKey = $this->getCertificate();
-        $this->signedFilename = storage_path("ticketbai{$this->invoiceNumber }.xml");
-        \Log::debug('Signed file: '.$this->signedFilename);
-        $ticketbai->sign($privateKey, $this->certPassword, $this->signedFilename);
+        $certPassword = $this->certPassword ?? '';
+        $this->signedFilename = storage_path('ticketbai' . $this->invoiceNumber . '.xml');
+        \Illuminate\Support\Facades\Log::debug('Signed file: ' . $this->signedFilename);
+        $ticketbai->sign($privateKey, $certPassword, $this->signedFilename);
         $qr = new \Barnetik\Tbai\Qr($ticketbai, true);
         $qrURL = $qr->qrUrl();
         $this->save();
         return $qrURL;
     }
 
-    function save()
+    public function save(): void
     {
         $this->model = new Invoice();
         $model = $this->model;
-        \Log::debug($this->signedFilename);
-        $disk = Storage::disk($this->disk);
-        
-        // Use configured column names
-        $pathColumn = Invoice::getColumnName('path');
-        $issuerColumn = Invoice::getColumnName('issuer');
-        $numberColumn = Invoice::getColumnName('number');
+        \Illuminate\Support\Facades\Log::debug($this->signedFilename ?? '');
+        $disk = Storage::disk($this->disk ?? 'local');
+
+        $pathColumn = Invoice::getColumnName('path') ?? 'path';
+        $issuerColumn = Invoice::getColumnName('issuer') ?? 'issuer';
+        $numberColumn = Invoice::getColumnName('number') ?? 'number';
         $signatureColumn = Invoice::getColumnName('signature');
         $dataColumn = Invoice::getColumnName('data');
-        
-        // Build attributes array - only include columns that are configured (not null)
+
         $attributes = [
             $pathColumn => $disk->putFile('ticketbai', new \Illuminate\Http\File($this->signedFilename)),
             $issuerColumn => $this->idIssuer,
             $numberColumn => $this->invoiceNumber,
         ];
-        
-        // Signature is optional - only add if column name is configured (not null)
-        if ($signatureColumn !== null && $signatureColumn !== '') {
+
+        if ($signatureColumn !== null && $signatureColumn !== '' && $this->ticketbai !== null) {
             $attributes[$signatureColumn] = $this->ticketbai->signatureValue();
         }
-        
-        // Data column is optional - only add if column name is configured and data is not null
+
         if ($dataColumn !== null && $dataColumn !== '' && $this->data !== null) {
             $attributes[$dataColumn] = $this->data;
         }
-        
-        // Set all attributes at once
+
         $model->fill($attributes);
         $model->save();
         $this->clearFile();
         Job\InvoiceSend::dispatch($this);
     }
 
-    function copySignatureOnLocal()
+    public function copySignatureOnLocal(): void
     {
-        $disk = Storage::disk($this->disk);
+        $disk = Storage::disk($this->disk ?? 'local');
         $pathColumn = Invoice::getColumnName('path');
+        if ($pathColumn === null || $this->model === null || $this->signedFilename === null) {
+            return;
+        }
         file_put_contents($this->signedFilename, $disk->get($this->model->{$pathColumn}));
     }
 
-    function getModel()
+    public function getModel(): ?Invoice
     {
         return $this->model;
     }
 
-    function getTBAI()
+    public function getTBAI(): ?\Barnetik\Tbai\TicketBai
     {
         return $this->ticketbai;
     }
 
-    function data(mixed $data)
+    public function data(mixed $data): void
     {
         $this->data = $data;
     }
 
-    function clearFile(){
-        if (is_readable($this->signedFilename)) {
+    public function clearFile(): void
+    {
+        if ($this->signedFilename !== null && is_readable($this->signedFilename)) {
             unlink($this->signedFilename);
         }
     }
