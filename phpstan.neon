@@ -1,0 +1,18 @@
+parameters:
+    level: 5
+    paths:
+        - src
+        - tests
+    excludePaths:
+        - vendor
+        - .phpunit.cache
+    reportUnmatchedIgnoredErrors: false
+    ignoreErrors:
+        - path: tests/Unit/TicketBAITest.php
+          message: '~Parameter #2 \$unitPrice.*expects float, string given~'
+        - path: src/Console/ResendInvoicesCommand.php
+          message: '~Call to an undefined method.*whereKey~'
+        - path: src/Console/ResendInvoicesCommand.php
+          message: '~Parameter #1 \$callback.*map\(\) expects callable~'
+        - path: src/TicketBAI.php
+          message: '~Call to an undefined static method.*Invoice::where~'

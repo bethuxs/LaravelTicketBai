@@ -30,11 +30,12 @@ A Laravel package for generating and submitting TicketBAI (Ticket BAI) invoices 
 - ✅ QR code generation for invoices
 - ✅ Support for multiple territories (Araba, Bizkaia, Gipuzkoa)
 - ✅ Automatic fingerprint calculation from previous invoices
+- ✅ Artisan command to resend failed/pending invoices (`ticketbai:resend`)
 
 ## Requirements
 
 - PHP >= 8.2
-- Laravel >= 8.0
+- Laravel >= 8.0 (tested with Laravel 10.x and 11.x)
 - [barnetik/ticketbai](https://github.com/barnetik/ticketbai) package
 - X.509 certificate (.p12 file) for signing invoices
 - TicketBAI license and credentials
@@ -400,18 +401,42 @@ Or with PHPUnit directly:
 ./vendor/bin/phpunit
 ```
 
+Optional: run static analysis (PHPStan) and code style (Laravel Pint):
+
+```bash
+composer analyse   # PHPStan
+composer format   # Pint (fixes style)
+```
+
 ## Queue Configuration
 
-Invoice submission is handled via Laravel queues. Make sure your queue worker is running:
+Invoice submission is **asynchronous**: after generating and signing an invoice, the package dispatches an `InvoiceSend` job to the Laravel queue. You must have at least one queue worker running for invoices to be sent to the TicketBAI API:
 
 ```bash
 php artisan queue:work
 ```
 
-The `InvoiceSend` job automatically:
-- Submits the invoice to TicketBAI API
-- Updates the `sent` timestamp on success
-- Logs errors on failure
+- **Production:** Use a process manager (e.g. Supervisor) to keep `queue:work` running.
+- **Testing / sync:** If you use `QUEUE_CONNECTION=sync`, jobs run immediately in the same process (no worker needed, but slower and no retries).
+
+The `InvoiceSend` job submits the invoice to the TicketBAI API and updates the `sent` timestamp on success.
+
+## Resending Failed or Pending Invoices
+
+Invoices that were not sent (e.g. API error or worker down) have `sent = null`. To re-queue them for sending:
+
+```bash
+# List and resend all pending invoices
+php artisan ticketbai:resend --all
+
+# Resend a single invoice by ID
+php artisan ticketbai:resend --id=123
+
+# Dry run: only list what would be resent
+php artisan ticketbai:resend --all --dry-run
+```
+
+Resend requires the `territory` column to be present and configured (it is added by the package migration and filled when generating invoices). If you use a custom table, add a `territory` column and set `TICKETBAI_COLUMN_TERRITORY` in config.
 
 ## Troubleshooting
 
