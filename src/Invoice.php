@@ -31,6 +31,7 @@ class Invoice extends Model
     public function getTable(): string
     {
         $tableName = config('ticketbai.table.name', 'invoices');
+
         return $tableName ?: 'invoices';
     }
 
@@ -41,12 +42,17 @@ class Invoice extends Model
     {
         $columns = config('ticketbai.table.columns', []);
 
-        if (in_array($internalColumn, ['signature', 'data'], true) && !isset($columns[$internalColumn])) {
+        if (in_array($internalColumn, ['signature', 'data'], true) && ! isset($columns[$internalColumn])) {
             return null;
         }
 
         $columnName = $columns[$internalColumn] ?? $internalColumn;
-        return ($columnName === null || $columnName === '') ? null : $columnName;
+
+        if ($columnName === '' || ! is_string($columnName)) {
+            return null;
+        }
+
+        return $columnName;
     }
 
     /**

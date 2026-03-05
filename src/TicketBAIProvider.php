@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace EBethus\LaravelTicketBAI;
 
+use EBethus\LaravelTicketBAI\Console\ResendInvoicesCommand;
 use Illuminate\Support\ServiceProvider;
 
 class TicketBAIProvider extends ServiceProvider
@@ -26,15 +27,21 @@ class TicketBAIProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->loadMigrationsFrom(__DIR__ . '/database');
+        $this->loadMigrationsFrom(__DIR__.'/database');
 
         $this->publishes([
-            __DIR__ . '/config/ticketbai.php' => config_path('ticketbai.php'),
+            __DIR__.'/config/ticketbai.php' => config_path('ticketbai.php'),
         ], 'ticketbai-config');
 
         $this->mergeConfigFrom(
-            __DIR__ . '/config/ticketbai.php',
+            __DIR__.'/config/ticketbai.php',
             'ticketbai'
         );
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                ResendInvoicesCommand::class,
+            ]);
+        }
     }
 }

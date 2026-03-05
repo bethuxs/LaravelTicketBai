@@ -9,13 +9,12 @@ use EBethus\LaravelTicketBAI\Tests\TestCase;
 
 class InvoiceTest extends TestCase
 {
-
     /** @test */
     public function it_uses_configured_table_name()
     {
         config(['ticketbai.table.name' => 'custom_invoices']);
 
-        $invoice = new Invoice();
+        $invoice = new Invoice;
         $this->assertEquals('custom_invoices', $invoice->getTable());
     }
 
@@ -24,7 +23,7 @@ class InvoiceTest extends TestCase
     {
         config(['ticketbai.table.name' => null]);
 
-        $invoice = new Invoice();
+        $invoice = new Invoice;
         $this->assertEquals('invoices', $invoice->getTable());
     }
 

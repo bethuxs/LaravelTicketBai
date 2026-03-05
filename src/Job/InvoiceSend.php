@@ -21,8 +21,7 @@ class InvoiceSend implements ShouldQueue
 
     public function __construct(
         protected TicketBAI $ticketbai
-    ) {
-    }
+    ) {}
 
     public function handle(): void
     {
@@ -33,7 +32,7 @@ class InvoiceSend implements ShouldQueue
         $privateKey = $ticketbai->getCertificate();
         $certPassword = $ticketbai->getCertPassword();
         $debug = config('app.debug');
-        $test = !App::environment('production');
+        $test = ! App::environment('production');
         $api = \Barnetik\Tbai\Api::createForTicketBai($tbai, $test, $debug);
 
         try {
@@ -41,13 +40,25 @@ class InvoiceSend implements ShouldQueue
         } catch (\Throwable $e) {
             if ($model !== null) {
                 $pathColumn = Invoice::getColumnName('path') ?? 'path';
-                $diskName = config('services.ticketbai.disk', 'local');
-                $data = Storage::disk($diskName)->get($model->{$pathColumn});
-                $exception = new \Exception($data . "\n\n" . $e->getMessage());
+                $diskName = $ticketbai->getDisk();
+                $xmlContent = Storage::disk($diskName)->get($model->{$pathColumn});
+                Log::error('TicketBAI invoice send failed. XML content logged.', [
+                    'invoice_number' => $model->{Invoice::getColumnName('number') ?? 'number'},
+                    'exception' => $e->getMessage(),
+                    'xml_length' => strlen($xmlContent),
+                ]);
+                $exception = new \Exception(
+                    sprintf(
+                        'TicketBAI send failed for invoice [%s]: %s',
+                        $model->getKey(),
+                        $e->getMessage()
+                    )
+                );
                 $this->fail($exception);
             } else {
                 $this->fail($e);
             }
+
             return;
         }
 

@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace EBethus\LaravelTicketBAI\Tests\Unit;
 
-use EBethus\LaravelTicketBAI\TicketBAI;
+use EBethus\LaravelTicketBAI\Exceptions\CertificateNotFoundException;
+use EBethus\LaravelTicketBAI\Exceptions\InvalidTerritoryException;
 use EBethus\LaravelTicketBAI\Tests\TestCase;
+use EBethus\LaravelTicketBAI\TicketBAI;
 use Illuminate\Support\Facades\Storage;
 
 class TicketBAITest extends TestCase
 {
-
     protected function setUp(): void
     {
         parent::setUp();
@@ -109,5 +110,47 @@ class TicketBAITest extends TestCase
         $ticketbai = new TicketBAI([]);
         // This should not throw an error even if signature is null
         $this->assertTrue(true);
+    }
+
+    /** @test */
+    public function it_returns_disk_from_config_or_local()
+    {
+        $ticketbai = new TicketBAI(['license' => 'L', 'nif' => 'B1', 'appName' => 'A', 'appVersion' => '1', 'certPassword' => 'p', 'disk' => 'local']);
+        $this->assertSame('local', $ticketbai->getDisk());
+
+        $ticketbaiCustom = new TicketBAI(['license' => 'L', 'nif' => 'B1', 'appName' => 'A', 'appVersion' => '1', 'certPassword' => 'p', 'disk' => 's3']);
+        $this->assertSame('s3', $ticketbaiCustom->getDisk());
+
+        $ticketbaiEmpty = new TicketBAI([]);
+        $this->assertSame('local', $ticketbaiEmpty->getDisk());
+    }
+
+    /** @test */
+    public function it_throws_invalid_territory_exception_for_invalid_territory()
+    {
+        $this->expectException(InvalidTerritoryException::class);
+        $this->expectExceptionMessage('Territory "INVALID" is invalid');
+
+        $ticketbai = new TicketBAI([]);
+        $ticketbai->setVendor('L', 'B1', 'App', '1.0');
+        $ticketbai->issuer('B12345678', 'Company', 1);
+        $ticketbai->setVat(21);
+        $ticketbai->add('Item', 10.0, 1);
+        $ticketbai->invoice('INVALID', 'Test');
+    }
+
+    /** @test */
+    public function it_throws_certificate_not_found_when_cert_file_missing()
+    {
+        config(['ticketbai.cert_path' => __DIR__.'/../stubs/nonexistent-cert.p12']);
+
+        $this->expectException(CertificateNotFoundException::class);
+        $this->expectExceptionMessage('TicketBAI certificate not found or not readable');
+
+        $ticketbai = new TicketBAI([
+            'license' => 'L', 'nif' => 'B1', 'appName' => 'A', 'appVersion' => '1',
+            'certPassword' => 'p',
+        ]);
+        $ticketbai->getCertificate();
     }
 }

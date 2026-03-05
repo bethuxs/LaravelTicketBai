@@ -19,7 +19,7 @@ return [
 
     'table' => [
         'name' => env('TICKETBAI_TABLE_NAME', 'invoices'),
-        
+
         /*
         |--------------------------------------------------------------------------
         | Column Mappings
@@ -27,40 +27,23 @@ return [
         |
         | Map the internal column names to your actual database columns.
         | The library uses these internal names:
-        | - issuer: The ID of the issuer (transaction_id in your case)
-        | - number: The invoice number
         | - signature: The TicketBAI signature (OPTIONAL - set to null to disable)
         | - path: The file path where the signed XML is stored
-        | - data: Additional JSON data
+        | - data: Additional JSON data (OPTIONAL - set to null to disable)
         | - sent: Timestamp when the invoice was sent
         | - created_at: Creation timestamp
         | - updated_at: Update timestamp
         |
         */
         'columns' => [
-            // Map to your transaction_id column
-            'issuer' => env('TICKETBAI_COLUMN_ISSUER', 'transaction_id'),
-            
-            // Map to your provider_reference column
-            'number' => env('TICKETBAI_COLUMN_NUMBER', 'provider_reference'),
-            
-            // Signature column - OPTIONAL, can be null or omitted if you don't need to store it
-            // Set to null or empty string to disable signature storage
-            'signature' => env('TICKETBAI_COLUMN_SIGNATURE', null),
-            
-            // Path column - you may need to add this column if it doesn't exist
-            // This stores the file path of the signed XML
+            // Defaults match the migration table (invoices). For custom tables use env e.g. TICKETBAI_COLUMN_ISSUER=transaction_id
+            'issuer' => env('TICKETBAI_COLUMN_ISSUER', 'issuer'),
+            'number' => env('TICKETBAI_COLUMN_NUMBER', 'number'),
+            'territory' => env('TICKETBAI_COLUMN_TERRITORY', 'territory'),
+            'signature' => env('TICKETBAI_COLUMN_SIGNATURE', 'signature'),
             'path' => env('TICKETBAI_COLUMN_PATH', 'path'),
-            
-            // Data column - OPTIONAL, can be null or omitted if you don't need to store extra data
-            // This stores additional JSON data passed via the data() method
-            // Set to null or empty string to disable data storage
-            'data' => env('TICKETBAI_COLUMN_DATA', null),
-            
-            // Sent timestamp - you may map this to 'attempted_at' or add a 'sent' column
-            'sent' => env('TICKETBAI_COLUMN_SENT', 'attempted_at'),
-            
-            // Standard Laravel timestamps
+            'data' => env('TICKETBAI_COLUMN_DATA', 'data'),
+            'sent' => env('TICKETBAI_COLUMN_SENT', 'sent'),
             'created_at' => env('TICKETBAI_COLUMN_CREATED_AT', 'created_at'),
             'updated_at' => env('TICKETBAI_COLUMN_UPDATED_AT', 'updated_at'),
         ],

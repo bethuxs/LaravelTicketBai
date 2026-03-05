@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace EBethus\LaravelTicketBAI\Tests;
 
-use Orchestra\Testbench\TestCase as OrchestraTestCase;
 use EBethus\LaravelTicketBAI\TicketBAIProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Orchestra\Testbench\TestCase as OrchestraTestCase;
 
 abstract class TestCase extends OrchestraTestCase
 {
@@ -20,7 +20,7 @@ abstract class TestCase extends OrchestraTestCase
         parent::setUp();
 
         // Run migrations
-        $this->loadMigrationsFrom(__DIR__ . '/../src/database');
+        $this->loadMigrationsFrom(__DIR__.'/../src/database');
     }
 
     /**
@@ -47,9 +47,9 @@ abstract class TestCase extends OrchestraTestCase
         // Setup default database to use sqlite :memory:
         $app['config']->set('database.default', 'testbench');
         $app['config']->set('database.connections.testbench', [
-            'driver'   => 'sqlite',
+            'driver' => 'sqlite',
             'database' => ':memory:',
-            'prefix'   => '',
+            'prefix' => '',
         ]);
 
         // Setup TicketBAI config
@@ -67,6 +67,7 @@ abstract class TestCase extends OrchestraTestCase
         $app['config']->set('ticketbai.table.columns', [
             'issuer' => 'issuer',
             'number' => 'number',
+            'territory' => 'territory',
             'signature' => 'signature',
             'path' => 'path',
             'data' => 'data',

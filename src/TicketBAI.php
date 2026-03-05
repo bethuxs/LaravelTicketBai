@@ -4,17 +4,38 @@ declare(strict_types=1);
 
 namespace EBethus\LaravelTicketBAI;
 
-use Barnetik\Tbai\Fingerprint\Vendor;
 use Barnetik\Tbai\Fingerprint\PreviousInvoice;
+use Barnetik\Tbai\Fingerprint\Vendor;
 use Barnetik\Tbai\Invoice\Breakdown\NationalSubjectNotExemptBreakdownItem;
 use Barnetik\Tbai\Invoice\Data;
 use Barnetik\Tbai\Subject;
 use Barnetik\Tbai\ValueObject\Amount;
+use EBethus\LaravelTicketBAI\Exceptions\CertificateNotFoundException;
+use EBethus\LaravelTicketBAI\Exceptions\InvalidTerritoryException;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class TicketBAI
 {
+    public const TERRITORY_ARABA = 'ARABA';
+
+    public const TERRITORY_BIZKAIA = 'BIZKAIA';
+
+    public const TERRITORY_GIPUZKOA = 'GIPUZKOA';
+
+    private const VALID_TERRITORIES = [
+        self::TERRITORY_ARABA,
+        self::TERRITORY_BIZKAIA,
+        self::TERRITORY_GIPUZKOA,
+    ];
+
+    /** Territory name to barnetik API code (01, 02, 03) */
+    private const TERRITORY_TO_CODE = [
+        self::TERRITORY_ARABA => '01',
+        self::TERRITORY_BIZKAIA => '02',
+        self::TERRITORY_GIPUZKOA => '03',
+    ];
+
     protected ?Vendor $vendor = null;
 
     /** @var array<int, \Barnetik\Tbai\Invoice\Data\Detail> */
@@ -52,7 +73,7 @@ class TicketBAI
             $this->certPassword = $config['certPassword'];
             $this->setVendor($license, $nif, $appName, $appVersion);
 
-            if (!empty($config['disk'])) {
+            if (! empty($config['disk'])) {
                 $this->disk = $config['disk'];
             }
         }
@@ -61,6 +82,11 @@ class TicketBAI
     public function setVendor(string $license, string $nif, string $appName, string $appVersion): void
     {
         $this->vendor = new Vendor($license, $nif, $appName, $appVersion);
+    }
+
+    public function getDisk(): string
+    {
+        return $this->disk ?? 'local';
     }
 
     protected function getFingerprint(): \Barnetik\Tbai\Fingerprint
@@ -110,15 +136,17 @@ class TicketBAI
     protected function getInvoiceNumber(): string
     {
         $this->invoiceNumber = (string) Str::ulid();
+
         return $this->invoiceNumber;
     }
 
     protected function simplifyHeader(): \Barnetik\Tbai\Invoice\Header
     {
         $invoiceNumber = $this->getInvoiceNumber();
-        $now = new \DateTime();
+        $now = new \DateTime;
         $date = new \Barnetik\Tbai\ValueObject\Date($now->format('d-m-Y'));
         $time = new \Barnetik\Tbai\ValueObject\Time($now->format('H:i:s'));
+
         return \Barnetik\Tbai\Invoice\Header::createSimplified($invoiceNumber, $date, $time, '');
     }
 
@@ -131,6 +159,7 @@ class TicketBAI
             $this->items,
             function (float $a, $i): float {
                 $amount = $i->toArray();
+
                 return $a + (float) $amount['totalAmount'];
             },
             0.0
@@ -139,6 +168,7 @@ class TicketBAI
         foreach ($this->items as $i) {
             $data->addDetail($i);
         }
+
         return $data;
     }
 
@@ -161,6 +191,11 @@ class TicketBAI
 
     public function invoice(string $territory, string $description): string
     {
+        $territory = strtoupper($territory);
+        if (! in_array($territory, self::VALID_TERRITORIES, true)) {
+            throw InvalidTerritoryException::for($territory);
+        }
+
         $data = $this->getData($description);
         $header = $this->simplifyHeader();
         $fingerprint = $this->getFingerprint();
@@ -177,15 +212,16 @@ class TicketBAI
             NationalSubjectNotExemptBreakdownItem::NOT_EXEMPT_TYPE_S1,
             [$vatDetail]
         );
-        $breakdown = new \Barnetik\Tbai\Invoice\Breakdown();
+        $breakdown = new \Barnetik\Tbai\Invoice\Breakdown;
         $breakdown->addNationalSubjectNotExemptBreakdownItem($notExemptBreakdown);
         $invoice = new \Barnetik\Tbai\Invoice($header, $data, $breakdown);
 
+        $territoryCode = self::TERRITORY_TO_CODE[$territory];
         $this->ticketbai = new \Barnetik\Tbai\TicketBai(
             $this->subject,
             $invoice,
             $fingerprint,
-            $territory,
+            $territoryCode,
             false
         );
 
@@ -198,6 +234,11 @@ class TicketBAI
         $certFile = (is_string($path) && $path !== '' && (str_starts_with($path, '/') || (DIRECTORY_SEPARATOR === '\\' && strlen($path) >= 2 && $path[1] === ':')))
             ? $path
             : storage_path($path);
+
+        if (! is_file($certFile) || ! is_readable($certFile)) {
+            throw CertificateNotFoundException::atPath($certFile);
+        }
+
         return \Barnetik\Tbai\PrivateKey::p12($certFile);
     }
 
@@ -211,25 +252,27 @@ class TicketBAI
         $ticketbai = $this->ticketbai;
         $privateKey = $this->getCertificate();
         $certPassword = $this->certPassword ?? '';
-        $this->signedFilename = storage_path('ticketbai' . $this->invoiceNumber . '.xml');
-        \Illuminate\Support\Facades\Log::debug('Signed file: ' . $this->signedFilename);
+        $this->signedFilename = storage_path('ticketbai'.$this->invoiceNumber.'.xml');
+        \Illuminate\Support\Facades\Log::debug('Signed file: '.$this->signedFilename);
         $ticketbai->sign($privateKey, $certPassword, $this->signedFilename);
         $qr = new \Barnetik\Tbai\Qr($ticketbai, true);
         $qrURL = $qr->qrUrl();
         $this->save();
+
         return $qrURL;
     }
 
     public function save(): void
     {
-        $this->model = new Invoice();
+        $this->model = new Invoice;
         $model = $this->model;
         \Illuminate\Support\Facades\Log::debug($this->signedFilename ?? '');
-        $disk = Storage::disk($this->disk ?? 'local');
+        $disk = Storage::disk($this->getDisk());
 
         $pathColumn = Invoice::getColumnName('path') ?? 'path';
         $issuerColumn = Invoice::getColumnName('issuer') ?? 'issuer';
         $numberColumn = Invoice::getColumnName('number') ?? 'number';
+        $territoryColumn = Invoice::getColumnName('territory');
         $signatureColumn = Invoice::getColumnName('signature');
         $dataColumn = Invoice::getColumnName('data');
 
@@ -238,6 +281,10 @@ class TicketBAI
             $issuerColumn => $this->idIssuer,
             $numberColumn => $this->invoiceNumber,
         ];
+
+        if ($territoryColumn !== null && $territoryColumn !== '' && $this->ticketbai !== null) {
+            $attributes[$territoryColumn] = $this->ticketbai->territory();
+        }
 
         if ($signatureColumn !== null && $signatureColumn !== '' && $this->ticketbai !== null) {
             $attributes[$signatureColumn] = $this->ticketbai->signatureValue();
@@ -255,7 +302,7 @@ class TicketBAI
 
     public function copySignatureOnLocal(): void
     {
-        $disk = Storage::disk($this->disk ?? 'local');
+        $disk = Storage::disk($this->getDisk());
         $pathColumn = Invoice::getColumnName('path');
         if ($pathColumn === null || $this->model === null || $this->signedFilename === null) {
             return;
