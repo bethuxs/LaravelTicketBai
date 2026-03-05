@@ -1,1 +1,14 @@
-vendor/**
+/vendor/
+/.idea/
+/.vscode/
+.phpunit.cache/
+.phpunit.result.cache
+composer.lock
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.backup
+.env.production
+.phpunit.result.cache
+coverage/
