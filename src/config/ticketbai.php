@@ -36,7 +36,9 @@ return [
         |
         */
         'columns' => [
-            // Defaults match the migration table (invoices). For custom tables use env e.g. TICKETBAI_COLUMN_ISSUER=transaction_id
+            // Defaults match the package migration (issuer, number, ...).
+            // If your table has different column names, set these via .env or replace the defaults below.
+            // Example for custom table: issuer -> transaction_id, number -> provider_reference
             'issuer' => env('TICKETBAI_COLUMN_ISSUER', 'issuer'),
             'number' => env('TICKETBAI_COLUMN_NUMBER', 'number'),
             'territory' => env('TICKETBAI_COLUMN_TERRITORY', 'territory'),
@@ -48,4 +50,21 @@ return [
             'updated_at' => env('TICKETBAI_COLUMN_UPDATED_AT', 'updated_at'),
         ],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Example: Custom table (e.g. Vivetix)
+    |--------------------------------------------------------------------------
+    | If your `invoices` table uses different column names, copy this block
+    | into your app's config/ticketbai.php (after publishing) or set .env:
+    |
+    | TICKETBAI_COLUMN_ISSUER=transaction_id
+    | TICKETBAI_COLUMN_NUMBER=provider_reference
+    | TICKETBAI_COLUMN_TERRITORY=territory
+    | TICKETBAI_COLUMN_PATH=path
+    | ... etc (use your actual column names)
+    |
+    | Or in config/ticketbai.php replace defaults, e.g.:
+    |   'number' => env('TICKETBAI_COLUMN_NUMBER', 'provider_reference'),
+    */
 ];

@@ -23,20 +23,7 @@ class TicketBAI
 
     public const TERRITORY_GIPUZKOA = 'GIPUZKOA';
 
-    private const VALID_TERRITORIES = [
-        self::TERRITORY_ARABA,
-        self::TERRITORY_BIZKAIA,
-        self::TERRITORY_GIPUZKOA,
-    ];
-
-    /** Territory name to barnetik API code (01, 02, 03) */
-    private const TERRITORY_TO_CODE = [
-        self::TERRITORY_ARABA => '01',
-        self::TERRITORY_BIZKAIA => '02',
-        self::TERRITORY_GIPUZKOA => '03',
-    ];
-
-    /** Barnetik code to territory name (accept "01", "02", "03" in addition to names) */
+    /** Code (01, 02, 03) => name. Single source of truth; codes and names both accepted in invoice() */
     private const CODE_TO_TERRITORY = [
         '01' => self::TERRITORY_ARABA,
         '02' => self::TERRITORY_BIZKAIA,
@@ -202,7 +189,7 @@ class TicketBAI
         if (isset(self::CODE_TO_TERRITORY[$territory])) {
             $territory = self::CODE_TO_TERRITORY[$territory];
         }
-        if (! in_array($territory, self::VALID_TERRITORIES, true)) {
+        if (! in_array($territory, array_values(self::CODE_TO_TERRITORY), true)) {
             throw InvalidTerritoryException::for($territory);
         }
 
@@ -226,7 +213,7 @@ class TicketBAI
         $breakdown->addNationalSubjectNotExemptBreakdownItem($notExemptBreakdown);
         $invoice = new \Barnetik\Tbai\Invoice($header, $data, $breakdown);
 
-        $territoryCode = self::TERRITORY_TO_CODE[$territory];
+        $territoryCode = (string) array_search($territory, self::CODE_TO_TERRITORY, true);
         $this->ticketbai = new \Barnetik\Tbai\TicketBai(
             $this->subject,
             $invoice,
