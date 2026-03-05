@@ -25,7 +25,7 @@ class ResendInvoiceTest extends TestCase
         $invoice = new Invoice;
         $invoice->path = 'ticketbai/dummy.xml';
         $invoice->issuer = 1;
-        $invoice->number = 'INV-1';
+        $invoice->provider_reference = 'INV-1';
         $invoice->save();
 
         $this->expectException(\RuntimeException::class);
@@ -41,7 +41,7 @@ class ResendInvoiceTest extends TestCase
         $invoice = new Invoice;
         $invoice->path = 'ticketbai/dummy.xml';
         $invoice->issuer = 1;
-        $invoice->number = 'INV-1';
+        $invoice->provider_reference = 'INV-1';
         $invoice->territory = null;
         $invoice->save();
 
@@ -61,7 +61,7 @@ class ResendInvoiceTest extends TestCase
         $invoice = new Invoice;
         $invoice->path = $path;
         $invoice->issuer = 1;
-        $invoice->number = 'INV-1';
+        $invoice->provider_reference = 'INV-1';
         $invoice->territory = '01';
         $invoice->save();
 

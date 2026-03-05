@@ -12,7 +12,7 @@ return new class extends Migration
     {
         $tableName = config('ticketbai.table.name', 'invoices');
         Schema::table($tableName, function (Blueprint $table) {
-            $table->string('territory', 20)->nullable()->after('number');
+            $table->string('territory', 20)->nullable()->after('provider_reference');
         });
     }
 

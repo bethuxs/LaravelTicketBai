@@ -40,7 +40,7 @@ return [
             // If your table has different column names, set these via .env or replace the defaults below.
             // Example for custom table: issuer -> transaction_id, number -> provider_reference
             'issuer' => env('TICKETBAI_COLUMN_ISSUER', 'issuer'),
-            'number' => env('TICKETBAI_COLUMN_NUMBER', 'number'),
+            'number' => env('TICKETBAI_COLUMN_NUMBER', 'provider_reference'),
             'territory' => env('TICKETBAI_COLUMN_TERRITORY', 'territory'),
             'signature' => env('TICKETBAI_COLUMN_SIGNATURE', 'signature'),
             'path' => env('TICKETBAI_COLUMN_PATH', 'path'),

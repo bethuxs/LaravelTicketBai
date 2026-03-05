@@ -51,11 +51,11 @@ class InvoiceSaveAndDispatchTest extends TestCase
 
         $this->assertDatabaseHas('invoices', [
             'issuer' => 1,
-            'number' => 'TEST-INV-001',
+            'provider_reference' => 'TEST-INV-001',
             'signature' => 'test-signature-value',
         ]);
 
-        $invoice = Invoice::query()->where('number', 'TEST-INV-001')->first();
+        $invoice = Invoice::query()->where('provider_reference', 'TEST-INV-001')->first();
         $this->assertNotNull($invoice);
         $this->assertNotEmpty($invoice->path);
         $this->assertTrue(Storage::disk('local')->exists($invoice->path));

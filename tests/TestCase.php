@@ -66,7 +66,7 @@ abstract class TestCase extends OrchestraTestCase
         $app['config']->set('ticketbai.table.name', 'invoices');
         $app['config']->set('ticketbai.table.columns', [
             'issuer' => 'issuer',
-            'number' => 'number',
+            'number' => 'provider_reference',
             'territory' => 'territory',
             'signature' => 'signature',
             'path' => 'path',

@@ -33,7 +33,7 @@ class InvoiceSendFailureTest extends TestCase
         $invoice = new Invoice;
         $invoice->path = $path;
         $invoice->issuer = 1;
-        $invoice->number = 'INV-SEND-1';
+        $invoice->provider_reference = 'INV-SEND-1';
         $invoice->territory = '01';
         $invoice->save();
 
@@ -63,7 +63,7 @@ class InvoiceSendFailureTest extends TestCase
         $invoice = new Invoice;
         $invoice->path = $path;
         $invoice->issuer = 1;
-        $invoice->number = 'INV-API-FAIL';
+        $invoice->provider_reference = 'INV-API-FAIL';
         $invoice->territory = '01';
         $invoice->save();
 

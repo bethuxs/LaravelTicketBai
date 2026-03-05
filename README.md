@@ -207,11 +207,11 @@ The library supports flexible table and column configuration, allowing you to us
 
 ### Default Table Structure
 
-The default migration creates an `invoices` table with columns `issuer`, `number`, `path`, `signature`, `data`, `sent`, etc. **The config defaults in `config/ticketbai.php` match this table.** If you use the default migration, you do not need to set column env vars.
+The default migration creates an `invoices` table with columns `issuer`, `provider_reference`, `path`, `signature`, `data`, `sent`, `territory`, etc. **The config defaults in `config/ticketbai.php` match this table.** If you use the default migration, you do not need to set column env vars.
 
 ### Custom Table Configuration
 
-If you use **your own table** with different column names (e.g. `transaction_id` instead of `issuer`, `provider_reference` instead of `number`), override the mappings via environment variables so the library knows where to store each value. Example: `TICKETBAI_COLUMN_ISSUER=transaction_id`, `TICKETBAI_COLUMN_NUMBER=provider_reference`, `TICKETBAI_COLUMN_SENT=attempted_at`.
+If you use **your own table** with different column names (e.g. `transaction_id` instead of `issuer`), override the mappings via environment variables. Example: `TICKETBAI_COLUMN_ISSUER=transaction_id`, `TICKETBAI_COLUMN_NUMBER=invoice_number`, `TICKETBAI_COLUMN_SENT=attempted_at`.
 
 Configure column mappings in `config/ticketbai.php`:
 
@@ -220,9 +220,9 @@ Configure column mappings in `config/ticketbai.php`:
     'name' => env('TICKETBAI_TABLE_NAME', 'invoices'),
     'columns' => [
         // Defaults match the default migration. For your own table use env, e.g.:
-        // TICKETBAI_COLUMN_ISSUER=transaction_id, TICKETBAI_COLUMN_NUMBER=provider_reference
+        // TICKETBAI_COLUMN_ISSUER=transaction_id, TICKETBAI_COLUMN_NUMBER=invoice_number
         'issuer' => env('TICKETBAI_COLUMN_ISSUER', 'issuer'),
-        'number' => env('TICKETBAI_COLUMN_NUMBER', 'number'),
+        'number' => env('TICKETBAI_COLUMN_NUMBER', 'provider_reference'),
         'territory' => env('TICKETBAI_COLUMN_TERRITORY', 'territory'),
         'signature' => env('TICKETBAI_COLUMN_SIGNATURE', 'signature'),
         'path' => env('TICKETBAI_COLUMN_PATH', 'path'),
@@ -260,7 +260,7 @@ TICKETBAI_COLUMN_UPDATED_AT=updated_at
 
 - **`path`**: Required - stores the signed XML file path
 - **`issuer`**: Required - stores the issuer ID
-- **`number`**: Required - stores the invoice number
+- **`provider_reference`**: Required - stores the invoice number (config key: `number`)
 - **`created_at`**, **`updated_at`**: Required - standard Laravel timestamps
 
 ## API Reference
@@ -380,8 +380,8 @@ $ticketbai = app('ticketbai');
 // ... configure and generate invoice ...
 
 $model = $ticketbai->getModel();
-echo $model->number; // Invoice number
-echo $model->path;   // XML file path
+echo $model->provider_reference; // Invoice number (default column name)
+echo $model->path;               // XML file path
 ```
 
 ## Testing
