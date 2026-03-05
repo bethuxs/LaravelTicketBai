@@ -31,7 +31,7 @@ class Invoice extends Model
     public function getTable()
     {
         $tableName = config('ticketbai.table.name', 'invoices');
-        return $tableName;
+        return $tableName ?: 'invoices';
     }
 
     /**
