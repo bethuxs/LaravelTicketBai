@@ -71,6 +71,19 @@ class Invoice extends Model
     }
 
     /**
+     * Get the validated TicketBAI data key (for data[key]). Throws if key is empty.
+     */
+    public static function getTicketBaiDataKey(): string
+    {
+        $key = config('ticketbai.ticketbai_data_key', 'ticketbai');
+        if ($key === null || $key === '') {
+            throw Exceptions\InvalidConfigurationException::emptyDataKey();
+        }
+
+        return $key;
+    }
+
+    /**
      * Get TicketBAI payload (signature, path, territory).
      * Signature and territory from data[key]; path from path column.
      *
@@ -78,7 +91,7 @@ class Invoice extends Model
      */
     public static function getTicketBaiPayload(self $model): array
     {
-        $key = config('ticketbai.ticketbai_data_key', 'ticketbai');
+        $key = self::getTicketBaiDataKey();
         $dataColumn = self::getColumnName('data') ?? 'data';
         $pathCol = self::getColumnName('path');
         $pathFromColumn = $pathCol !== null ? ($model->{$pathCol} ?? null) : null;

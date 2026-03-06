@@ -277,7 +277,7 @@ class TicketBAI
         $issuerColumn = Invoice::getColumnName('issuer') ?? 'issuer';
         $numberColumn = Invoice::getColumnName('number') ?? 'number';
         $dataColumn = Invoice::getColumnName('data') ?? 'data';
-        $dataKey = config('ticketbai.ticketbai_data_key', 'ticketbai');
+        $dataKey = Invoice::getTicketBaiDataKey();
 
         $pathValue = $disk->putFile('ticketbai', new \Illuminate\Http\File($this->signedFilename));
 

@@ -79,6 +79,28 @@ class InvoiceTest extends TestCase
     }
 
     /** @test */
+    public function get_ticketbai_data_key_throws_when_empty(): void
+    {
+        config(['ticketbai.ticketbai_data_key' => '']);
+
+        $this->expectException(\EBethus\LaravelTicketBAI\Exceptions\InvalidConfigurationException::class);
+        $this->expectExceptionMessage('TICKETBAI_DATA_KEY cannot be empty');
+
+        Invoice::getTicketBaiDataKey();
+    }
+
+    /** @test */
+    public function get_ticketbai_data_key_throws_when_null(): void
+    {
+        config(['ticketbai.ticketbai_data_key' => null]);
+
+        $this->expectException(\EBethus\LaravelTicketBAI\Exceptions\InvalidConfigurationException::class);
+        $this->expectExceptionMessage('TICKETBAI_DATA_KEY cannot be empty');
+
+        Invoice::getTicketBaiDataKey();
+    }
+
+    /** @test */
     public function get_ticketbai_payload_reads_from_data_key(): void
     {
         config(['ticketbai.ticketbai_data_key' => 'ticketbai']);

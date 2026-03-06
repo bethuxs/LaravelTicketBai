@@ -25,6 +25,7 @@ return [
     | Signature and territory are always stored in the generic `data` JSON
     | column under this key, so the encadenamiento (signature chaining)
     | works. The file path is always in the path column. Default: 'ticketbai'.
+    | **Must not be empty** (e.g. do not set TICKETBAI_DATA_KEY="" in .env).
     | Set to another string if you need a different key (e.g. for multiple
     | TicketBAI contexts). Example: data->ticketbai = { "signature", "territory" }.
     |
