@@ -253,8 +253,9 @@ TICKETBAI_COLUMN_UPDATED_AT=updated_at
 
 ### Optional Columns
 
-- **`signature`**: Set to `null` or empty string to disable. The library will work without storing the signature.
+- **`signature`**: Set to `null` or empty string to disable. The library will not insert this column when disabled.
 - **`data`**: Set to `null` or empty string to disable. Only stores data if you call the `data()` method and the column is configured.
+- **`territory`**: Set to `null` or empty string to disable. When disabled, the library will not insert the territory column (useful if your table does not have it). **Note:** The `ticketbai:resend` command requires territory to be configured and stored; if you disable it, resend will not work for those invoices.
 
 ### Required Columns
 
@@ -301,7 +302,7 @@ Attach additional JSON data to the invoice.
 
 Generate, sign, and save the invoice. Returns the QR code URL.
 
-- `$territory`: Territory code (`'ARABA'`, `'BIZKAIA'`, or `'GIPUZKOA'`)
+- `$territory`: Territory code: `'ARABA'`, `'BIZKAIA'`, or `'GIPUZKOA'` (or numeric codes `'01'`, `'02'`, `'03'`)
 - `$description`: Invoice description
 
 **Returns:** `string` - QR code URL
@@ -433,7 +434,7 @@ php artisan ticketbai:resend --id=123
 php artisan ticketbai:resend --all --dry-run
 ```
 
-Resend requires the `territory` column to be present and configured (it is added by the package migration and filled when generating invoices). If you use a custom table, add a `territory` column and set `TICKETBAI_COLUMN_TERRITORY` in config.
+Resend requires the `territory` column to be present and configured (it is added by the package migration and filled when generating invoices). If your table does not have a territory column, set `TICKETBAI_COLUMN_TERRITORY` to `null` or leave it empty in config to disable it—then the library will not try to insert territory, but the resend command will not be available for those invoices.
 
 ## Troubleshooting
 
