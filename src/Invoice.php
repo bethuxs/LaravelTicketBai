@@ -42,8 +42,13 @@ class Invoice extends Model
     {
         $columns = config('ticketbai.table.columns', []);
 
-        if (in_array($internalColumn, ['signature', 'data'], true) && ! isset($columns[$internalColumn])) {
-            return null;
+        // Optional columns: when not set or set to null/empty, return null (column disabled)
+        $optionalColumns = ['signature', 'data', 'territory'];
+        if (in_array($internalColumn, $optionalColumns, true)) {
+            $value = $columns[$internalColumn] ?? null;
+            if ($value === null || $value === '') {
+                return null;
+            }
         }
 
         $columnName = $columns[$internalColumn] ?? $internalColumn;

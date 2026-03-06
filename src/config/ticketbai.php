@@ -31,6 +31,7 @@ return [
         | - path: The file path where the signed XML is stored
         | - data: Additional JSON data (OPTIONAL - set to null to disable)
         | - sent: Timestamp when the invoice was sent
+        | - territory: Territory code for resend (OPTIONAL - set to null or '' to disable; if disabled, resend command will not work)
         | - created_at: Creation timestamp
         | - updated_at: Update timestamp
         |
