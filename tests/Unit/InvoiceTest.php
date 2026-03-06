@@ -44,35 +44,11 @@ class InvoiceTest extends TestCase
     }
 
     /** @test */
-    public function it_returns_null_for_optional_signature_column_when_not_configured()
-    {
-        config(['ticketbai.table.columns' => []]);
-
-        $this->assertNull(Invoice::getColumnName('signature'));
-    }
-
-    /** @test */
     public function it_returns_null_for_optional_data_column_when_not_configured()
     {
         config(['ticketbai.table.columns' => []]);
 
         $this->assertNull(Invoice::getColumnName('data'));
-    }
-
-    /** @test */
-    public function it_returns_null_when_column_is_explicitly_set_to_null()
-    {
-        config(['ticketbai.table.columns.signature' => null]);
-
-        $this->assertNull(Invoice::getColumnName('signature'));
-    }
-
-    /** @test */
-    public function it_returns_null_when_column_is_set_to_empty_string()
-    {
-        config(['ticketbai.table.columns.signature' => '']);
-
-        $this->assertNull(Invoice::getColumnName('signature'));
     }
 
     /** @test */
@@ -89,23 +65,21 @@ class InvoiceTest extends TestCase
     }
 
     /** @test */
-    public function get_ticketbai_payload_reads_from_dedicated_columns_when_data_key_not_set(): void
+    public function get_ticketbai_payload_returns_nulls_when_data_has_no_key(): void
     {
-        config(['ticketbai.ticketbai_data_key' => null]);
         $invoice = new Invoice;
         $invoice->path = 'ticketbai/foo.xml';
-        $invoice->signature = 'sig100';
-        $invoice->territory = '02';
+        $invoice->data = null;
 
         $payload = Invoice::getTicketBaiPayload($invoice);
 
         $this->assertSame('ticketbai/foo.xml', $payload['path']);
-        $this->assertSame('sig100', $payload['signature']);
-        $this->assertSame('02', $payload['territory']);
+        $this->assertNull($payload['signature']);
+        $this->assertNull($payload['territory']);
     }
 
     /** @test */
-    public function get_ticketbai_payload_reads_from_data_key_when_configured(): void
+    public function get_ticketbai_payload_reads_from_data_key(): void
     {
         config(['ticketbai.ticketbai_data_key' => 'ticketbai']);
         $invoice = new Invoice;

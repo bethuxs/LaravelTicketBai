@@ -30,13 +30,6 @@ class ResendInvoicesCommand extends Command
         }
 
         $sentColumn = Invoice::getColumnName('sent') ?? 'sent';
-        $territoryColumn = Invoice::getColumnName('territory');
-
-        if ($territoryColumn === null || $territoryColumn === '') {
-            $this->error('Territory column is not configured. Set TICKETBAI_COLUMN_TERRITORY in config to use resend.');
-
-            return self::FAILURE;
-        }
 
         $query = Invoice::query()->whereNull($sentColumn);
 
@@ -56,11 +49,12 @@ class ResendInvoicesCommand extends Command
 
         $this->table(
             ['ID', 'Number', 'Territory'],
-            $invoices->map(function (Invoice $inv) use ($numberColumn, $territoryColumn): array {
+            $invoices->map(function (Invoice $inv) use ($numberColumn): array {
+                $payload = Invoice::getTicketBaiPayload($inv);
                 return [
                     $inv->getKey(),
                     $inv->{$numberColumn},
-                    $inv->{$territoryColumn} ?? '-',
+                    $payload['territory'] ?? '-',
                 ];
             })->toArray()
         );

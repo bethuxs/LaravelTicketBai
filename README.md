@@ -27,7 +27,7 @@ A Laravel package for generating and submitting TicketBAI (Ticket BAI) invoices 
 - ✅ Flexible database table and column configuration
 - ✅ Support for custom table structures
 - ✅ Optional columns (signature, data, territory) for maximum flexibility
-- ✅ **Generic invoice table**: store TicketBAI-specific data (signature, path, territory) inside a JSON `data` column
+- ✅ **Encadenamiento**: firma y territorio siempre en columna JSON `data` bajo clave configurable (por defecto `ticketbai`)
 - ✅ QR code generation for invoices
 - ✅ Support for multiple territories (Araba, Bizkaia, Gipuzkoa)
 - ✅ Automatic fingerprint calculation from previous invoices
@@ -208,7 +208,7 @@ The library supports flexible table and column configuration, allowing you to us
 
 ### Default Table Structure
 
-The default migration creates an `invoices` table with columns `issuer`, `provider_reference`, `path`, `signature`, `data`, `sent`, `territory`, etc. **The config defaults in `config/ticketbai.php` match this table.** If you use the default migration, you do not need to set column env vars.
+The default migration creates an `invoices` table with columns `issuer`, `provider_reference`, `path`, `data`, `sent`, and timestamps. TicketBAI stores signature and territory in the `data` JSON column under the key `ticketbai`.
 
 ### Custom Table Configuration
 
@@ -252,21 +252,15 @@ TICKETBAI_COLUMN_CREATED_AT=created_at
 TICKETBAI_COLUMN_UPDATED_AT=updated_at
 ```
 
-### Optional Columns
+### TicketBAI payload in `data` (required for chaining)
 
-- **`signature`**: Set to `null` or empty string to disable. The library will not insert this column when disabled. For encadenamiento (chaining) only the first 100 characters are stored.
-- **`data`**: Set to `null` or empty string to disable. Stores extra JSON and, when `TICKETBAI_DATA_KEY` is set, the TicketBAI payload (signature, path, territory) under that key.
-- **`territory`**: Set to `null` or empty string to disable. When disabled, the library will not insert the territory column. **Note:** Resend requires territory to be stored (in a column or in `data`); see below.
-
-### Generic invoice table (TicketBAI data in JSON)
-
-If your `invoices` table is **generic** (used by several providers, not only TicketBAI), you can store TicketBAI-specific fields inside the JSON `data` column instead of using dedicated columns. Set in `.env` or config:
+Signature and territory are **always** stored in the JSON `data` column under a configurable key so that encadenamiento (signature chaining) works. Default key: `ticketbai`. Set in `.env` or config:
 
 ```env
 TICKETBAI_DATA_KEY=ticketbai
 ```
 
-Then the package stores and reads `signature`, `path` and `territory` under `data->ticketbai`, e.g.:
+The package stores and reads `signature` (first 100 chars) and `territory` under `data->ticketbai`. Path stays in the `path` column. Example:
 
 ```json
 {
@@ -278,12 +272,16 @@ Then the package stores and reads `signature`, `path` and `territory` under `dat
 }
 ```
 
-Your table needs: `id`, `issuer`, `number`, **`path`** (file path), `data` (JSON), `sent`, `created_at`, `updated_at`. No need for dedicated `signature` or `territory` columns. Other providers can use other keys in `data` (e.g. `data->other_provider`).
+Your table needs: `id`, `issuer`, `number`, **`path`** (file path), **`data`** (JSON), `sent`, `created_at`, `updated_at`. Other providers can use other keys in `data` (e.g. `data->other_provider`).
+
+### Optional column name override
+
+- **`data`**: Set to `null` or empty to use the default column name `'data'`.
 
 ### Required Columns
 
-- **`path`**: Required - stores the signed XML file path (filesystem; always in this column).
-- **`data`**: Required when using `TICKETBAI_DATA_KEY` (JSON column where TicketBAI stores signature and territory).
+- **`path`**: Required - stores the signed XML file path (filesystem).
+- **`data`**: Required - JSON column where TicketBAI stores signature and territory under `TICKETBAI_DATA_KEY`.
 
 ## API Reference
 
@@ -455,7 +453,7 @@ php artisan ticketbai:resend --id=123
 php artisan ticketbai:resend --all --dry-run
 ```
 
-Resend requires the invoice to have **territory** (in a column or in `data` when `TICKETBAI_DATA_KEY` is set) and **path** in the path column. If your table does not have a territory column and you do not use `TICKETBAI_DATA_KEY`, resend will not be available for those invoices.
+Resend requires **territory** and **path**: territory is read from `data[ticketbai_data_key]` (default `data->ticketbai`), path from the path column.
 
 ## Troubleshooting
 

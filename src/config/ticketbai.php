@@ -19,17 +19,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Store TicketBAI payload in JSON "data" column
+    | TicketBAI payload key in JSON "data" column (required for chaining)
     |--------------------------------------------------------------------------
     |
-    | When set (e.g. 'ticketbai'), signature and territory are stored
-    | inside the generic `data` JSON column under this key. The file path
-    | is always stored in the dedicated path column (filesystem reference).
-    | Example: data->ticketbai contains { "signature", "territory" }.
-    | When null, dedicated columns are used (signature, territory) as per mappings.
+    | Signature and territory are always stored in the generic `data` JSON
+    | column under this key, so the encadenamiento (signature chaining)
+    | works. The file path is always in the path column. Default: 'ticketbai'.
+    | Set to another string if you need a different key (e.g. for multiple
+    | TicketBAI contexts). Example: data->ticketbai = { "signature", "territory" }.
     |
     */
-    'ticketbai_data_key' => env('TICKETBAI_DATA_KEY', null),
+    'ticketbai_data_key' => env('TICKETBAI_DATA_KEY', 'ticketbai'),
 
     'table' => [
         'name' => env('TICKETBAI_TABLE_NAME', 'invoices'),
@@ -41,23 +41,16 @@ return [
         |
         | Map the internal column names to your actual database columns.
         | The library uses these internal names:
-        | - signature: The TicketBAI chain signature, first 100 chars (OPTIONAL if using ticketbai_data_key)
         | - path: The file path where the signed XML is stored (always used; required)
-        | - data: JSON column for generic payload; when ticketbai_data_key is set, TicketBAI uses this for signature/territory
-        | - territory: Territory code for resend (OPTIONAL if using ticketbai_data_key)
+        | - data: JSON column required for TicketBAI; signature and territory are stored under ticketbai_data_key
         | - sent: Timestamp when the invoice was sent
         | - created_at: Creation timestamp
         | - updated_at: Update timestamp
         |
         */
         'columns' => [
-            // Defaults match the package migration (issuer, number, ...).
-            // If your table has different column names, set these via .env or replace the defaults below.
-            // Example for custom table: issuer -> transaction_id, number -> provider_reference
             'issuer' => env('TICKETBAI_COLUMN_ISSUER', 'issuer'),
             'number' => env('TICKETBAI_COLUMN_NUMBER', 'provider_reference'),
-            'territory' => env('TICKETBAI_COLUMN_TERRITORY', 'territory'),
-            'signature' => env('TICKETBAI_COLUMN_SIGNATURE', 'signature'),
             'path' => env('TICKETBAI_COLUMN_PATH', 'path'),
             'data' => env('TICKETBAI_COLUMN_DATA', 'data'),
             'sent' => env('TICKETBAI_COLUMN_SENT', 'sent'),
@@ -75,8 +68,8 @@ return [
     |
     | TICKETBAI_COLUMN_ISSUER=transaction_id
     | TICKETBAI_COLUMN_NUMBER=provider_reference
-    | TICKETBAI_COLUMN_TERRITORY=territory
     | TICKETBAI_COLUMN_PATH=path
+    | TICKETBAI_COLUMN_DATA=data
     | ... etc (use your actual column names)
     |
     | Or in config/ticketbai.php replace defaults, e.g.:

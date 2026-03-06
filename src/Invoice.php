@@ -42,8 +42,8 @@ class Invoice extends Model
     {
         $columns = config('ticketbai.table.columns', []);
 
-        // Optional columns: when not set or set to null/empty, return null (column disabled)
-        $optionalColumns = ['signature', 'data', 'territory'];
+        // Optional: only 'data' can be disabled (column name override)
+        $optionalColumns = ['data'];
         if (in_array($internalColumn, $optionalColumns, true)) {
             $value = $columns[$internalColumn] ?? null;
             if ($value === null || $value === '') {
@@ -71,45 +71,31 @@ class Invoice extends Model
     }
 
     /**
-     * Get TicketBAI-specific payload (signature, path, territory).
-     * When ticketbai_data_key is set, reads from data[key]; otherwise from dedicated columns.
+     * Get TicketBAI payload (signature, path, territory).
+     * Signature and territory from data[key]; path from path column.
      *
      * @return array{signature?: string|null, path?: string|null, territory?: string|null}
      */
     public static function getTicketBaiPayload(self $model): array
     {
-        $key = config('ticketbai.ticketbai_data_key');
-        $dataColumn = self::getColumnName('data');
-
-        if ($key !== null && $key !== '' && $dataColumn !== null && $dataColumn !== '') {
-            $data = $model->{$dataColumn};
-            $pathCol = self::getColumnName('path');
-            $pathFromColumn = $pathCol !== null ? ($model->{$pathCol} ?? null) : null;
-            if (is_array($data) && isset($data[$key]) && is_array($data[$key])) {
-                return [
-                    'signature' => $data[$key]['signature'] ?? null,
-                    'path' => $pathFromColumn,
-                    'territory' => $data[$key]['territory'] ?? null,
-                ];
-            }
-
-            return ['signature' => null, 'path' => $pathFromColumn, 'territory' => null];
-        }
-
-        $payload = ['signature' => null, 'path' => null, 'territory' => null];
-        $sigCol = self::getColumnName('signature');
-        if ($sigCol !== null) {
-            $payload['signature'] = $model->{$sigCol} ?? null;
-        }
+        $key = config('ticketbai.ticketbai_data_key', 'ticketbai');
+        $dataColumn = self::getColumnName('data') ?? 'data';
         $pathCol = self::getColumnName('path');
-        if ($pathCol !== null) {
-            $payload['path'] = $model->{$pathCol} ?? null;
-        }
-        $terrCol = self::getColumnName('territory');
-        if ($terrCol !== null) {
-            $payload['territory'] = $model->{$terrCol} ?? null;
+        $pathFromColumn = $pathCol !== null ? ($model->{$pathCol} ?? null) : null;
+
+        $data = $model->{$dataColumn} ?? null;
+        if (! is_array($data) || ! isset($data[$key]) || ! is_array($data[$key])) {
+            return [
+                'signature' => null,
+                'path' => $pathFromColumn,
+                'territory' => null,
+            ];
         }
 
-        return $payload;
+        return [
+            'signature' => $data[$key]['signature'] ?? null,
+            'path' => $pathFromColumn,
+            'territory' => $data[$key]['territory'] ?? null,
+        ];
     }
 }

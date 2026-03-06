@@ -18,14 +18,13 @@ class ResendInvoiceTest extends TestCase
     }
 
     /** @test */
-    public function resend_throws_when_territory_column_not_configured(): void
+    public function resend_throws_when_territory_missing_in_data(): void
     {
-        config(['ticketbai.table.columns.territory' => '']);
-
         $invoice = new Invoice;
         $invoice->path = 'ticketbai/dummy.xml';
         $invoice->issuer = 1;
         $invoice->provider_reference = 'INV-1';
+        $invoice->data = ['ticketbai' => ['signature' => 'sig']];
         $invoice->save();
 
         $this->expectException(\RuntimeException::class);
@@ -36,13 +35,13 @@ class ResendInvoiceTest extends TestCase
     }
 
     /** @test */
-    public function resend_throws_when_territory_is_empty(): void
+    public function resend_throws_when_data_has_no_ticketbai_key(): void
     {
         $invoice = new Invoice;
         $invoice->path = 'ticketbai/dummy.xml';
         $invoice->issuer = 1;
         $invoice->provider_reference = 'INV-1';
-        $invoice->territory = null;
+        $invoice->data = [];
         $invoice->save();
 
         $this->expectException(\RuntimeException::class);
@@ -62,7 +61,7 @@ class ResendInvoiceTest extends TestCase
         $invoice->path = $path;
         $invoice->issuer = 1;
         $invoice->provider_reference = 'INV-1';
-        $invoice->territory = '01';
+        $invoice->data = ['ticketbai' => ['signature' => 'sig', 'territory' => '01']];
         $invoice->save();
 
         $this->expectException(\Throwable::class);

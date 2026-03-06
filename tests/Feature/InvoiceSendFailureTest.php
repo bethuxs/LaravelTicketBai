@@ -34,7 +34,7 @@ class InvoiceSendFailureTest extends TestCase
         $invoice->path = $path;
         $invoice->issuer = 1;
         $invoice->provider_reference = 'INV-SEND-1';
-        $invoice->territory = '01';
+        $invoice->data = ['ticketbai' => ['territory' => '01']];
         $invoice->save();
 
         $ticketbai = new TicketBAI(config('services.ticketbai'));
@@ -64,7 +64,7 @@ class InvoiceSendFailureTest extends TestCase
         $invoice->path = $path;
         $invoice->issuer = 1;
         $invoice->provider_reference = 'INV-API-FAIL';
-        $invoice->territory = '01';
+        $invoice->data = ['ticketbai' => ['territory' => '01']];
         $invoice->save();
 
         $privateKeyMock = $this->getMockBuilder(PrivateKey::class)->disableOriginalConstructor()->getMock();

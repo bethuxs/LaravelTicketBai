@@ -16,7 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional `territory` column: stored when generating an invoice for resend support.
 - Artisan command `ticketbai:resend` to re-queue sending of invoices with `sent=null` (`--id=`, `--all`, `--dry-run`).
 - Job `ResendInvoice` to resend a single invoice by loading XML from storage and calling the TicketBAI API.
-- Migration `add_territory_to_invoices_table` (adds nullable `territory` column).
 
 ### Changed
 

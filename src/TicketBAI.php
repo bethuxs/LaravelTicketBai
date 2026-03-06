@@ -276,10 +276,8 @@ class TicketBAI
         $pathColumn = Invoice::getColumnName('path') ?? 'path';
         $issuerColumn = Invoice::getColumnName('issuer') ?? 'issuer';
         $numberColumn = Invoice::getColumnName('number') ?? 'number';
-        $territoryColumn = Invoice::getColumnName('territory');
-        $signatureColumn = Invoice::getColumnName('signature');
-        $dataColumn = Invoice::getColumnName('data');
-        $dataKey = config('ticketbai.ticketbai_data_key');
+        $dataColumn = Invoice::getColumnName('data') ?? 'data';
+        $dataKey = config('ticketbai.ticketbai_data_key', 'ticketbai');
 
         $pathValue = $disk->putFile('ticketbai', new \Illuminate\Http\File($this->signedFilename));
 
@@ -289,24 +287,14 @@ class TicketBAI
             $numberColumn => $this->invoiceNumber,
         ];
 
-        if ($dataKey !== null && $dataKey !== '' && $dataColumn !== null && $dataColumn !== '' && $this->ticketbai !== null) {
-            $baseData = is_array($this->data) ? $this->data : [];
+        $baseData = is_array($this->data) ? $this->data : [];
+        if ($this->ticketbai !== null) {
             $baseData[$dataKey] = [
                 'signature' => $this->ticketbai->chainSignatureValue(),
                 'territory' => $this->ticketbai->territory(),
             ];
-            $attributes[$dataColumn] = $baseData;
-        } else {
-            if ($territoryColumn !== null && $territoryColumn !== '' && $this->ticketbai !== null) {
-                $attributes[$territoryColumn] = $this->ticketbai->territory();
-            }
-            if ($signatureColumn !== null && $signatureColumn !== '' && $this->ticketbai !== null) {
-                $attributes[$signatureColumn] = $this->ticketbai->chainSignatureValue();
-            }
-            if ($dataColumn !== null && $dataColumn !== '' && $this->data !== null) {
-                $attributes[$dataColumn] = $this->data;
-            }
         }
+        $attributes[$dataColumn] = $baseData;
 
         $model->fill($attributes);
         $model->save();

@@ -41,7 +41,7 @@ class ResendInvoice implements ShouldQueue
 
         if (empty($territory)) {
             throw new \RuntimeException(
-                'Cannot resend invoice: territory is not configured or missing. Set TICKETBAI_COLUMN_TERRITORY or use TICKETBAI_DATA_KEY so territory is stored in data.'
+                'Cannot resend invoice: territory is not configured or missing. Ensure data column contains territory under ticketbai_data_key.'
             );
         }
 
