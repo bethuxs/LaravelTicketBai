@@ -69,4 +69,47 @@ class Invoice extends Model
     {
         return config('ticketbai.table.columns', []);
     }
+
+    /**
+     * Get TicketBAI-specific payload (signature, path, territory).
+     * When ticketbai_data_key is set, reads from data[key]; otherwise from dedicated columns.
+     *
+     * @return array{signature?: string|null, path?: string|null, territory?: string|null}
+     */
+    public static function getTicketBaiPayload(self $model): array
+    {
+        $key = config('ticketbai.ticketbai_data_key');
+        $dataColumn = self::getColumnName('data');
+
+        if ($key !== null && $key !== '' && $dataColumn !== null && $dataColumn !== '') {
+            $data = $model->{$dataColumn};
+            $pathCol = self::getColumnName('path');
+            $pathFromColumn = $pathCol !== null ? ($model->{$pathCol} ?? null) : null;
+            if (is_array($data) && isset($data[$key]) && is_array($data[$key])) {
+                return [
+                    'signature' => $data[$key]['signature'] ?? null,
+                    'path' => $pathFromColumn,
+                    'territory' => $data[$key]['territory'] ?? null,
+                ];
+            }
+
+            return ['signature' => null, 'path' => $pathFromColumn, 'territory' => null];
+        }
+
+        $payload = ['signature' => null, 'path' => null, 'territory' => null];
+        $sigCol = self::getColumnName('signature');
+        if ($sigCol !== null) {
+            $payload['signature'] = $model->{$sigCol} ?? null;
+        }
+        $pathCol = self::getColumnName('path');
+        if ($pathCol !== null) {
+            $payload['path'] = $model->{$pathCol} ?? null;
+        }
+        $terrCol = self::getColumnName('territory');
+        if ($terrCol !== null) {
+            $payload['territory'] = $model->{$terrCol} ?? null;
+        }
+
+        return $payload;
+    }
 }

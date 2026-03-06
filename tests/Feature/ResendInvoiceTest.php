@@ -29,7 +29,7 @@ class ResendInvoiceTest extends TestCase
         $invoice->save();
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('territory column is not configured');
+        $this->expectExceptionMessage('territory is not configured or missing');
 
         $job = new ResendInvoice($invoice);
         $job->handle(app(\EBethus\LaravelTicketBAI\TicketBAI::class));
@@ -46,7 +46,7 @@ class ResendInvoiceTest extends TestCase
         $invoice->save();
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('territory is empty');
+        $this->expectExceptionMessage('territory is not configured or missing');
 
         $job = new ResendInvoice($invoice);
         $job->handle(app(\EBethus\LaravelTicketBAI\TicketBAI::class));

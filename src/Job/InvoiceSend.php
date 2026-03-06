@@ -40,14 +40,23 @@ class InvoiceSend implements ShouldQueue
             $result = $api->submitInvoice($tbai, $privateKey, $certPassword ?? '');
         } catch (\Throwable $e) {
             if ($model !== null) {
-                $pathColumn = Invoice::getColumnName('path') ?? 'path';
+                $payload = Invoice::getTicketBaiPayload($model);
+                $path = $payload['path'] ?? null;
+                if ($path === null) {
+                    $pathCol = Invoice::getColumnName('path');
+                    if ($pathCol !== null) {
+                        $path = $model->{$pathCol};
+                    }
+                }
                 $diskName = $this->disk ?? $ticketbai->getDisk();
-                $xmlContent = Storage::disk($diskName)->get($model->{$pathColumn});
-                Log::error('TicketBAI invoice send failed. XML content logged.', [
-                    'invoice_number' => $model->{Invoice::getColumnName('number') ?? 'number'},
-                    'exception' => $e->getMessage(),
-                    'xml_length' => strlen($xmlContent),
-                ]);
+                if ($path !== null) {
+                    $xmlContent = Storage::disk($diskName)->get($path);
+                    Log::error('TicketBAI invoice send failed. XML content logged.', [
+                        'invoice_number' => $model->{Invoice::getColumnName('number') ?? 'number'},
+                        'exception' => $e->getMessage(),
+                        'xml_length' => strlen($xmlContent),
+                    ]);
+                }
                 $exception = new \Exception(
                     sprintf(
                         'TicketBAI send failed for invoice [%s]: %s',

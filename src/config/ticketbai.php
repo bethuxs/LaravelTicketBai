@@ -17,6 +17,20 @@ return [
     */
     'cert_path' => env('TICKETBAI_CERT_PATH', 'certificado.p12'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Store TicketBAI payload in JSON "data" column
+    |--------------------------------------------------------------------------
+    |
+    | When set (e.g. 'ticketbai'), signature and territory are stored
+    | inside the generic `data` JSON column under this key. The file path
+    | is always stored in the dedicated path column (filesystem reference).
+    | Example: data->ticketbai contains { "signature", "territory" }.
+    | When null, dedicated columns are used (signature, territory) as per mappings.
+    |
+    */
+    'ticketbai_data_key' => env('TICKETBAI_DATA_KEY', null),
+
     'table' => [
         'name' => env('TICKETBAI_TABLE_NAME', 'invoices'),
 
@@ -27,11 +41,11 @@ return [
         |
         | Map the internal column names to your actual database columns.
         | The library uses these internal names:
-        | - signature: The TicketBAI signature (OPTIONAL - set to null to disable)
-        | - path: The file path where the signed XML is stored
-        | - data: Additional JSON data (OPTIONAL - set to null to disable)
+        | - signature: The TicketBAI chain signature, first 100 chars (OPTIONAL if using ticketbai_data_key)
+        | - path: The file path where the signed XML is stored (always used; required)
+        | - data: JSON column for generic payload; when ticketbai_data_key is set, TicketBAI uses this for signature/territory
+        | - territory: Territory code for resend (OPTIONAL if using ticketbai_data_key)
         | - sent: Timestamp when the invoice was sent
-        | - territory: Territory code for resend (OPTIONAL - set to null or '' to disable; if disabled, resend command will not work)
         | - created_at: Creation timestamp
         | - updated_at: Update timestamp
         |

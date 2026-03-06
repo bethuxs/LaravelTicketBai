@@ -34,7 +34,7 @@ class InvoiceSaveAndDispatchTest extends TestCase
         file_put_contents($tmpFile, '<?xml version="1.0"?><T:TicketBai xmlns:T="urn:ticketbai:emision"/>');
 
         $tbaiMock = $this->createMock(\Barnetik\Tbai\TicketBai::class);
-        $tbaiMock->method('signatureValue')->willReturn('test-signature-value');
+        $tbaiMock->method('chainSignatureValue')->willReturn('test-signature-value');
         $tbaiMock->method('territory')->willReturn('01');
 
         $ref = new \ReflectionClass($ticketbai);

@@ -28,27 +28,32 @@ class ResendInvoice implements ShouldQueue
     public function handle(TicketBAIService $ticketbaiService): void
     {
         $invoice = $this->invoice;
-        $pathColumn = Invoice::getColumnName('path') ?? 'path';
-        $territoryColumn = Invoice::getColumnName('territory');
-        $sentColumn = Invoice::getColumnName('sent') ?? 'sent';
+        $payload = Invoice::getTicketBaiPayload($invoice);
+        $path = $payload['path'] ?? null;
+        $territory = $payload['territory'] ?? null;
 
-        if ($territoryColumn === null || $territoryColumn === '') {
-            throw new \RuntimeException(
-                'Cannot resend invoice: territory column is not configured. Set TICKETBAI_COLUMN_TERRITORY in config.'
-            );
+        if ($path === null) {
+            $pathColumn = Invoice::getColumnName('path');
+            if ($pathColumn !== null) {
+                $path = $invoice->{$pathColumn};
+            }
         }
-
-        $path = $invoice->{$pathColumn};
-        $territory = $invoice->{$territoryColumn};
 
         if (empty($territory)) {
             throw new \RuntimeException(
-                sprintf('Cannot resend invoice id [%s]: territory is empty.', $invoice->getKey())
+                'Cannot resend invoice: territory is not configured or missing. Set TICKETBAI_COLUMN_TERRITORY or use TICKETBAI_DATA_KEY so territory is stored in data.'
+            );
+        }
+
+        if (empty($path)) {
+            throw new \RuntimeException(
+                sprintf('Cannot resend invoice id [%s]: path is empty.', $invoice->getKey())
             );
         }
 
         $diskName = $this->disk ?? $ticketbaiService->getDisk();
         $xml = Storage::disk($diskName)->get($path);
+        $sentColumn = Invoice::getColumnName('sent') ?? 'sent';
 
         $tbai = TicketBai::createFromXml($xml, $territory, false);
         $privateKey = $ticketbaiService->getCertificate();

@@ -87,4 +87,41 @@ class InvoiceTest extends TestCase
 
         $this->assertEquals($columns, Invoice::getColumnMappings());
     }
+
+    /** @test */
+    public function get_ticketbai_payload_reads_from_dedicated_columns_when_data_key_not_set(): void
+    {
+        config(['ticketbai.ticketbai_data_key' => null]);
+        $invoice = new Invoice;
+        $invoice->path = 'ticketbai/foo.xml';
+        $invoice->signature = 'sig100';
+        $invoice->territory = '02';
+
+        $payload = Invoice::getTicketBaiPayload($invoice);
+
+        $this->assertSame('ticketbai/foo.xml', $payload['path']);
+        $this->assertSame('sig100', $payload['signature']);
+        $this->assertSame('02', $payload['territory']);
+    }
+
+    /** @test */
+    public function get_ticketbai_payload_reads_from_data_key_when_configured(): void
+    {
+        config(['ticketbai.ticketbai_data_key' => 'ticketbai']);
+        $invoice = new Invoice;
+        $invoice->path = 'ticketbai/bar.xml';
+        $invoice->data = [
+            'ticketbai' => [
+                'signature' => 'chain-sig',
+                'territory' => '01',
+            ],
+            'order_id' => 42,
+        ];
+
+        $payload = Invoice::getTicketBaiPayload($invoice);
+
+        $this->assertSame('ticketbai/bar.xml', $payload['path']);
+        $this->assertSame('chain-sig', $payload['signature']);
+        $this->assertSame('01', $payload['territory']);
+    }
 }

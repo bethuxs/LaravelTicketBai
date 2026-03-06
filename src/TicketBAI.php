@@ -98,7 +98,8 @@ class TicketBAI
         $prevInvoice = null;
         if ($prev !== null) {
             $numberColumn = Invoice::getColumnName('number');
-            $signatureColumn = Invoice::getColumnName('signature');
+            $payload = Invoice::getTicketBaiPayload($prev);
+            $signatureValue = $payload['signature'] ?? null;
             $createdAtValue = $prev->{$createdAtColumn};
             if ($createdAtValue instanceof \Carbon\Carbon) {
                 $dateString = $createdAtValue->format('d-m-Y');
@@ -109,11 +110,10 @@ class TicketBAI
             }
 
             $sentDate = new \Barnetik\Tbai\ValueObject\Date($dateString);
-            $signatureValue = null;
-            if ($signatureColumn !== null) {
-                $signatureValue = $prev->{$signatureColumn} ?? null;
+            // Only chain to previous invoice when we have a stored signature (required by TicketBAI spec)
+            if ($signatureValue !== null && $signatureValue !== '') {
+                $prevInvoice = new PreviousInvoice($prev->{$numberColumn}, $sentDate, (string) $signatureValue, null);
             }
-            $prevInvoice = new PreviousInvoice($prev->{$numberColumn}, $sentDate, $signatureValue, null);
         }
 
         return new \Barnetik\Tbai\Fingerprint($this->vendor, $prevInvoice);
@@ -279,23 +279,33 @@ class TicketBAI
         $territoryColumn = Invoice::getColumnName('territory');
         $signatureColumn = Invoice::getColumnName('signature');
         $dataColumn = Invoice::getColumnName('data');
+        $dataKey = config('ticketbai.ticketbai_data_key');
+
+        $pathValue = $disk->putFile('ticketbai', new \Illuminate\Http\File($this->signedFilename));
 
         $attributes = [
-            $pathColumn => $disk->putFile('ticketbai', new \Illuminate\Http\File($this->signedFilename)),
+            $pathColumn => $pathValue,
             $issuerColumn => $this->idIssuer,
             $numberColumn => $this->invoiceNumber,
         ];
 
-        if ($territoryColumn !== null && $territoryColumn !== '' && $this->ticketbai !== null) {
-            $attributes[$territoryColumn] = $this->ticketbai->territory();
-        }
-
-        if ($signatureColumn !== null && $signatureColumn !== '' && $this->ticketbai !== null) {
-            $attributes[$signatureColumn] = $this->ticketbai->signatureValue();
-        }
-
-        if ($dataColumn !== null && $dataColumn !== '' && $this->data !== null) {
-            $attributes[$dataColumn] = $this->data;
+        if ($dataKey !== null && $dataKey !== '' && $dataColumn !== null && $dataColumn !== '' && $this->ticketbai !== null) {
+            $baseData = is_array($this->data) ? $this->data : [];
+            $baseData[$dataKey] = [
+                'signature' => $this->ticketbai->chainSignatureValue(),
+                'territory' => $this->ticketbai->territory(),
+            ];
+            $attributes[$dataColumn] = $baseData;
+        } else {
+            if ($territoryColumn !== null && $territoryColumn !== '' && $this->ticketbai !== null) {
+                $attributes[$territoryColumn] = $this->ticketbai->territory();
+            }
+            if ($signatureColumn !== null && $signatureColumn !== '' && $this->ticketbai !== null) {
+                $attributes[$signatureColumn] = $this->ticketbai->chainSignatureValue();
+            }
+            if ($dataColumn !== null && $dataColumn !== '' && $this->data !== null) {
+                $attributes[$dataColumn] = $this->data;
+            }
         }
 
         $model->fill($attributes);
@@ -306,12 +316,22 @@ class TicketBAI
 
     public function copySignatureOnLocal(): void
     {
-        $disk = Storage::disk($this->getDisk());
-        $pathColumn = Invoice::getColumnName('path');
-        if ($pathColumn === null || $this->model === null || $this->signedFilename === null) {
+        if ($this->model === null || $this->signedFilename === null) {
             return;
         }
-        file_put_contents($this->signedFilename, $disk->get($this->model->{$pathColumn}));
+        $payload = Invoice::getTicketBaiPayload($this->model);
+        $path = $payload['path'] ?? null;
+        if ($path === null) {
+            $pathColumn = Invoice::getColumnName('path');
+            if ($pathColumn !== null) {
+                $path = $this->model->{$pathColumn};
+            }
+        }
+        if ($path === null) {
+            return;
+        }
+        $disk = Storage::disk($this->getDisk());
+        file_put_contents($this->signedFilename, $disk->get($path));
     }
 
     public function getModel(): ?Invoice
