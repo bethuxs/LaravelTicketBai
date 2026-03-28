@@ -41,6 +41,9 @@ class Invoice extends Model
     public static function getColumnName(string $internalColumn): ?string
     {
         $columns = config('ticketbai.table.columns', []);
+        if (! is_array($columns)) {
+            $columns = [];
+        }
 
         // Optional: only 'data' can be disabled (column name override)
         $optionalColumns = ['data'];
@@ -67,7 +70,11 @@ class Invoice extends Model
      */
     public static function getColumnMappings(): array
     {
-        return config('ticketbai.table.columns', []);
+        $columns = config('ticketbai.table.columns', []);
+        if (! is_array($columns)) {
+            return [];
+        }
+        return $columns;
     }
 
     /**
