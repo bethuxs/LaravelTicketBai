@@ -73,6 +73,15 @@ class TicketBAI
         }
     }
 
+    /**
+     * Format amount to proper decimal places (2 decimals by default for currency).
+     * Prevents binary float precision issues when casting to string.
+     */
+    protected function formatAmount(float $amount, int $decimals = 2): string
+    {
+        return number_format($amount, $decimals, '.', '');
+    }
+
     public function setVendor(string $license, string $nif, string $appName, string $appVersion): void
     {
         $this->vendor = new Vendor($license, $nif, $appName, $appVersion);
@@ -158,7 +167,7 @@ class TicketBAI
             },
             0.0
         );
-        $data = new Data($description, new Amount((string) $this->totalInvoice), [Data::VAT_REGIME_01]);
+        $data = new Data($description, new Amount($this->formatAmount($this->totalInvoice)), [Data::VAT_REGIME_01]);
         foreach ($this->items as $i) {
             $data->addDetail($i);
         }
@@ -176,10 +185,10 @@ class TicketBAI
         if ($this->vatPerc === null) {
             throw new \RuntimeException('VAT percentage not set');
         }
-        $unitAmount = new Amount((string) ($unitPrice * (100 - $this->vatPerc) / 100), 12, 8);
-        $quantity = new Amount((string) $q);
-        $disc = $discount !== null ? new Amount((string) $discount) : null;
-        $total = new Amount((string) ($unitPrice * $q - ($discount ?? 0)));
+        $unitAmount = new Amount($this->formatAmount($unitPrice * (100 - $this->vatPerc) / 100), 12, 8);
+        $quantity = new Amount($this->formatAmount($q));
+        $disc = $discount !== null ? new Amount($this->formatAmount($discount)) : null;
+        $total = new Amount($this->formatAmount($unitPrice * $q - ($discount ?? 0)));
         $this->items[] = new \Barnetik\Tbai\Invoice\Data\Detail($desc, $unitAmount, $quantity, $total, $disc);
     }
 
@@ -198,12 +207,12 @@ class TicketBAI
         $fingerprint = $this->getFingerprint();
 
         $totalInvoice = $this->totalInvoice;
-        $vat = new Amount((string) $this->vatPerc);
+        $vat = new Amount($this->formatAmount($this->vatPerc));
         $totalWithOutVat = $totalInvoice * (100 - $this->vatPerc) / 100;
         $vatDetail = new \Barnetik\Tbai\Invoice\Breakdown\VatDetail(
-            new Amount((string) $totalWithOutVat),
+            new Amount($this->formatAmount($totalWithOutVat)),
             $vat,
-            new Amount((string) ($totalInvoice - $totalWithOutVat))
+            new Amount($this->formatAmount($totalInvoice - $totalWithOutVat))
         );
         $notExemptBreakdown = new NationalSubjectNotExemptBreakdownItem(
             NationalSubjectNotExemptBreakdownItem::NOT_EXEMPT_TYPE_S1,
