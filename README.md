@@ -79,7 +79,18 @@ This package automatically applies a security patch to the `barnetik/ticketbai` 
 - ✅ Provides detailed error messages including OpenSSL diagnostics
 - ✅ Prevents "Trying to access array offset on null" errors in PHP 8+
 
-The patch is applied automatically during `composer install`. No additional configuration is required.
+**How it works:** The patch is automatically applied during `composer install` through `cweagans/composer-patches`. The patch file is included in the `patches/` directory of this package, and the path is resolved relative to the package root.
+
+**Verification:** You can verify the patch has been applied by checking that the `vendor/barnetik/ticketbai/src/Barnetik/Tbai/AbstractTicketBai.php::sign()` method contains certificate validation checks.
+
+**Alternative:** If building a custom distribution or fork, you can also reference the patch directly from a raw URL:
+```json
+"patches": {
+    "barnetik/ticketbai": {
+        "Fix certificate validation": "https://raw.githubusercontent.com/yourusername/laravel-ticketbai/main/patches/barnetik-ticketbai-certificate-validation.patch"
+    }
+}
+```
 
 ## Configuration
 

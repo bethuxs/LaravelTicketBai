@@ -46,16 +46,13 @@
 +                    throw new \RuntimeException('Unable to read private key file: ' . $privateKey->keyPath());
 +                }
 +                
-+                $privKey = openssl_get_privatekey($keyContent,
-                     $password
--                );
-+                );
++                $privKey = openssl_get_privatekey($keyContent, $password);
 +                if ($privKey === false) {
 +                    throw new \RuntimeException('Failed to read private key. This may be due to an incorrect password or invalid key format.');
 +                }
 +                $certData['pkey'] = $privKey;
-             }
- 
++            }
++
 +            // Verify that certificate and key are properly loaded
 +            if (empty($certData['cert']) || $certData['cert'] === false) {
 +                throw new \RuntimeException('Certificate data is empty or invalid.');
@@ -67,3 +64,8 @@
              $xadesClass = $this->getXadesClassForTerritory();
  
              if (!file_exists(dirname($signedFileStoragePath))) {
+-                mkdir(dirname($signedFileStoragePath), 0777, true);
+-            }
+-
+-            call_user_func(
+-                $xadesClass . '::signDocument',
