@@ -69,6 +69,18 @@ php artisan migrate
 
 **Note:** You can also use your own table structure by configuring column mappings (see [Database Configuration](#database-configuration)).
 
+### Automatic Patch for barnetik/ticketbai
+
+This package automatically applies a security patch to the `barnetik/ticketbai` dependency using `cweagans/composer-patches`. This patch adds proper validation when reading X.509 certificates:
+
+- ✅ Validates P12 file existence and content before parsing
+- ✅ Checks `openssl_pkcs12_read()` return value and throws descriptive exceptions
+- ✅ Validates PEM file reads and `openssl_get_privatekey()` results  
+- ✅ Provides detailed error messages including OpenSSL diagnostics
+- ✅ Prevents "Trying to access array offset on null" errors in PHP 8+
+
+The patch is applied automatically during `composer install`. No additional configuration is required.
+
 ## Configuration
 
 ### Service Configuration
