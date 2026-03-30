@@ -12,7 +12,8 @@
         "orchestra/testbench": "^7.0|^8.0|^9.0|^10.0",
         "phpstan/phpstan": "^1.10",
         "laravel/pint": "^1.13",
-        "larastan/larastan": "2.x-dev"
+        "larastan/larastan": "2.x-dev",
+        "cweagans/composer-patches": "^1.7"
     },
     "license": "MIT",
     "autoload": {
@@ -32,12 +33,22 @@
         }
     ],
     "minimum-stability": "dev",
+    "config": {
+        "allow-plugins": {
+            "cweagans/composer-patches": true
+        }
+    },
     "scripts": {
         "test": "phpunit",
         "analyse": "phpstan analyse",
         "format": "pint"
     },
     "extra": {
+        "patches": {
+            "barnetik/ticketbai": {
+                "Fix certificate validation in AbstractTicketBai.sign() method": "patches/barnetik-ticketbai-certificate-validation.patch"
+            }
+        },
         "laravel": {
             "providers": [
                 "EBethus\\LaravelTicketBAI\\TicketBAIProvider"

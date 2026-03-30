@@ -1,0 +1,69 @@
+--- a/src/Barnetik/Tbai/AbstractTicketBai.php
++++ b/src/Barnetik/Tbai/AbstractTicketBai.php
+@@ -59,17 +59,58 @@ abstract class AbstractTicketBai implements TbaiXml, TbaiSignable, Stringable, J
+ 
+     public function sign(PrivateKey $privateKey, string $password, string $signedFileStoragePath): void
+     {
+         if (!$this->isSigned()) {
++            $certData = [];
++            
+             if ($privateKey->type() === PrivateKey::TYPE_P12) {
+-                openssl_pkcs12_read(
+-                    file_get_contents($privateKey->keyPath()),
+-                    $certData,
+-                    $password
+-                );
++                // Read P12 file
++                $p12FileContent = file_get_contents($privateKey->keyPath());
++                if ($p12FileContent === false || empty($p12FileContent)) {
++                    throw new \RuntimeException('Unable to read P12 certificate file: ' . $privateKey->keyPath());
++                }
++
++                // Parse P12 certificate
++                $result = openssl_pkcs12_read($p12FileContent, $certData, $password);
++                if ($result === false) {
++                    $errorMsg = 'Failed to read P12 certificate. This may be due to an incorrect password or corrupt P12 file.';
++                    $openSSLError = openssl_error_string();
++                    if ($openSSLError !== false) {
++                        $errorMsg .= ' OpenSSL error: ' . $openSSLError;
++                    }
++                    throw new \RuntimeException($errorMsg);
++                }
+             } else {
+-                $certData['cert'] = file_get_contents($privateKey->certPath());
+-                $certData['pkey'] = openssl_get_privatekey(
+-                    file_get_contents($privateKey->keyPath()),
++                // Read PEM certificate
++                $certContent = file_get_contents($privateKey->certPath());
++                if ($certContent === false || empty($certContent)) {
++                    throw new \RuntimeException('Unable to read certificate file: ' . $privateKey->certPath());
++                }
++                $certData['cert'] = $certContent;
++
++                // Read private key
++                $keyContent = file_get_contents($privateKey->keyPath());
++                if ($keyContent === false || empty($keyContent)) {
++                    throw new \RuntimeException('Unable to read private key file: ' . $privateKey->keyPath());
++                }
++                
++                $privKey = openssl_get_privatekey($keyContent,
+                     $password
+-                );
++                );
++                if ($privKey === false) {
++                    throw new \RuntimeException('Failed to read private key. This may be due to an incorrect password or invalid key format.');
++                }
++                $certData['pkey'] = $privKey;
+             }
+ 
++            // Verify that certificate and key are properly loaded
++            if (empty($certData['cert']) || $certData['cert'] === false) {
++                throw new \RuntimeException('Certificate data is empty or invalid.');
++            }
++            if (empty($certData['pkey']) || $certData['pkey'] === false) {
++                throw new \RuntimeException('Private key data is empty or invalid.');
++            }
++
+             $xadesClass = $this->getXadesClassForTerritory();
+ 
+             if (!file_exists(dirname($signedFileStoragePath))) {
