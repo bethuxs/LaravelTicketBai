@@ -81,7 +81,7 @@ class InvoiceTest extends TestCase
     /** @test */
     public function get_ticketbai_data_key_throws_when_empty(): void
     {
-        config(['ticketbai.ticketbai_data_key' => '']);
+        config(['ticketbai.data_key' => '']);
 
         $this->expectException(\EBethus\LaravelTicketBAI\Exceptions\InvalidConfigurationException::class);
         $this->expectExceptionMessage('TICKETBAI_DATA_KEY cannot be empty');
@@ -92,7 +92,7 @@ class InvoiceTest extends TestCase
     /** @test */
     public function get_ticketbai_data_key_throws_when_null(): void
     {
-        config(['ticketbai.ticketbai_data_key' => null]);
+        config(['ticketbai.data_key' => null]);
 
         $this->expectException(\EBethus\LaravelTicketBAI\Exceptions\InvalidConfigurationException::class);
         $this->expectExceptionMessage('TICKETBAI_DATA_KEY cannot be empty');
@@ -103,7 +103,7 @@ class InvoiceTest extends TestCase
     /** @test */
     public function get_ticketbai_payload_reads_from_data_key(): void
     {
-        config(['ticketbai.ticketbai_data_key' => 'ticketbai']);
+        config(['ticketbai.data_key' => 'ticketbai']);
         $invoice = new Invoice;
         $invoice->path = 'ticketbai/bar.xml';
         $invoice->data = [

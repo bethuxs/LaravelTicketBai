@@ -3,77 +3,76 @@
 return [
     /*
     |--------------------------------------------------------------------------
-    | Invoice Table Configuration
+    | Certificate Configuration
     |--------------------------------------------------------------------------
     |
-    | Configure the table name and column mappings for the invoice storage.
-    | This allows you to use your own table structure while maintaining
-    | compatibility with the TicketBAI library.
+    | Path to your X.509 certificate (.p12 or .pem format).
+    | Can be:
+    | - Relative path: resolved from storage_path() (e.g., 'certificado.p12')
+    | - Absolute path: used as-is (e.g., '/etc/certs/ticketbai.p12' or 'C:\certs\cert.p12')
     |
-    */
-
-    /*
-    | Certificate path: relative to storage_path() or absolute. E.g. 'certificado.p12' or '/etc/certs/ticketbai.p12'
+    | Set via environment variable: TICKETBAI_CERT_PATH
+    |
     */
     'cert_path' => env('TICKETBAI_CERT_PATH', 'certificado.p12'),
 
     /*
     |--------------------------------------------------------------------------
-    | TicketBAI payload key in JSON "data" column (required for chaining)
+    | TicketBAI Payload Key in JSON "data" Column
     |--------------------------------------------------------------------------
     |
-    | Signature and territory are always stored in the generic `data` JSON
-    | column under this key, so the encadenamiento (signature chaining)
-    | works. The file path is always in the path column. Default: 'ticketbai'.
-    | **Must not be empty** (e.g. do not set TICKETBAI_DATA_KEY="" in .env).
-    | Set to another string if you need a different key (e.g. for multiple
-    | TicketBAI contexts). Example: data->ticketbai = { "signature", "territory" }.
+    | The TicketBAI signature and territory are always stored in the generic
+    | `data` JSON column under this key (for signature chaining/"encadenamiento").
+    | The file path is always stored in the `path` column separately.
+    |
+    | Default: 'ticketbai'
+    | WARNING: Must not be empty. Do NOT set TICKETBAI_DATA_KEY="" in .env
+    |
+    | Example with custom key:
+    |   'data_key' => 'my_invoices'
+    |   → Signature stored at: data->my_invoices->signature
+    |   → Territory stored at: data->my_invoices->territory
     |
     */
-    'ticketbai_data_key' => env('TICKETBAI_DATA_KEY', 'ticketbai'),
+    'data_key' => env('TICKETBAI_DATA_KEY', 'ticketbai'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Database Table Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configure your invoices table name and column mappings.
+    | This allows flexible integration with existing table structures.
+    |
+    | Supported internal columns:
+    | ├─ issuer       (required) - Who issued the invoice (user/seller ID)
+    | ├─ number       (required) - Invoice number/reference code
+    | ├─ path         (required) - File path where signed XML is stored
+    | ├─ data         (required) - JSON column for TicketBAI data
+    | ├─ territory    (optional) - Invoice territory code (Araba/Bizkaia/Gipuzkoa)
+    | ├─ signature    (optional) - XML digital signature
+    | ├─ sent         (optional) - Timestamp when sent to TicketBAI API
+    | ├─ created_at   (optional) - Creation timestamp
+    | └─ updated_at   (optional) - Update timestamp
+    |
+    | Set to NULL to skip storing that value (e.g., 'territory' => NULL)
+    | meaning the data will only be stored in the JSON 'data' column.
+    |
+    */
     'table' => [
         'name' => env('TICKETBAI_TABLE_NAME', 'invoices'),
 
-        /*
-        |--------------------------------------------------------------------------
-        | Column Mappings
-        |--------------------------------------------------------------------------
-        |
-        | Map the internal column names to your actual database columns.
-        | The library uses these internal names:
-        | - path: The file path where the signed XML is stored (always used; required)
-        | - data: JSON column required for TicketBAI; signature and territory are stored under ticketbai_data_key
-        | - sent: Timestamp when the invoice was sent
-        | - created_at: Creation timestamp
-        | - updated_at: Update timestamp
-        |
-        */
         'columns' => [
-            'issuer' => env('TICKETBAI_COLUMN_ISSUER', 'issuer'),
-            'number' => env('TICKETBAI_COLUMN_NUMBER', 'provider_reference'),
-            'path' => env('TICKETBAI_COLUMN_PATH', 'path'),
-            'data' => env('TICKETBAI_COLUMN_DATA', 'data'),
-            'sent' => env('TICKETBAI_COLUMN_SENT', 'sent'),
+            'issuer'     => env('TICKETBAI_COLUMN_ISSUER', 'issuer'),
+            'number'     => env('TICKETBAI_COLUMN_NUMBER', 'provider_reference'),
+            'territory'  => env('TICKETBAI_COLUMN_TERRITORY', null),
+            'signature'  => env('TICKETBAI_COLUMN_SIGNATURE', null),
+            'path'       => env('TICKETBAI_COLUMN_PATH', 'path'),
+            'data'       => env('TICKETBAI_COLUMN_DATA', 'data'),
+            'sent'       => env('TICKETBAI_COLUMN_SENT', null),
             'created_at' => env('TICKETBAI_COLUMN_CREATED_AT', 'created_at'),
             'updated_at' => env('TICKETBAI_COLUMN_UPDATED_AT', 'updated_at'),
         ],
     ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Example: Custom table (e.g. Vivetix)
-    |--------------------------------------------------------------------------
-    | If your `invoices` table uses different column names, copy this block
-    | into your app's config/ticketbai.php (after publishing) or set .env:
-    |
-    | TICKETBAI_COLUMN_ISSUER=transaction_id
-    | TICKETBAI_COLUMN_NUMBER=provider_reference
-    | TICKETBAI_COLUMN_PATH=path
-    | TICKETBAI_COLUMN_DATA=data
-    | ... etc (use your actual column names)
-    |
-    | Or in config/ticketbai.php replace defaults, e.g.:
-    |   'number' => env('TICKETBAI_COLUMN_NUMBER', 'provider_reference'),
-    */
 ];
+

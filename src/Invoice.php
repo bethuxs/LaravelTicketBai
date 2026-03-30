@@ -82,7 +82,7 @@ class Invoice extends Model
      */
     public static function getTicketBaiDataKey(): string
     {
-        $key = config('ticketbai.ticketbai_data_key', 'ticketbai');
+        $key = config('ticketbai.data_key', 'ticketbai');
         if ($key === null || $key === '') {
             throw Exceptions\InvalidConfigurationException::emptyDataKey();
         }

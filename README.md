@@ -49,15 +49,9 @@ Install the package via Composer:
 composer require ebethus/laravel-ticketbai
 ```
 
-### Publish Configuration
+### Configure Environment Variables
 
-Publish the configuration file:
-
-```bash
-php artisan vendor:publish --tag=ticketbai-config
-```
-
-This will create `config/ticketbai.php` where you can configure table and column mappings.
+After installation, add your TicketBAI credentials and certificate path to your `.env` file (see [Configuration](#configuration) section).
 
 ### Run Migrations
 
@@ -67,67 +61,130 @@ If you want to use the default invoice table structure:
 php artisan migrate
 ```
 
-**Note:** You can also use your own table structure by configuring column mappings (see [Database Configuration](#database-configuration)).
+**Note:** You can also use your own table structure by configuring column mappings via environment variables.
 
-### Automatic Patch for barnetik/ticketbai
+## Usage
 
-This package automatically applies a security patch to the `barnetik/ticketbai` dependency using `cweagans/composer-patches`. This patch adds proper validation when reading X.509 certificates:
+### Quick Start: Environment Variables Only
 
-- ✅ Validates P12 file existence and content before parsing
-- ✅ Checks `openssl_pkcs12_read()` return value and throws descriptive exceptions
-- ✅ Validates PEM file reads and `openssl_get_privatekey()` results  
-- ✅ Provides detailed error messages including OpenSSL diagnostics
-- ✅ Prevents "Trying to access array offset on null" errors in PHP 8+
+The simplest approach is to **use environment variables only** — no need to publish the config file:
 
-**How it works:** The patch is automatically applied during `composer install` through `cweagans/composer-patches`. The patch file is included in the `patches/` directory of this package, and the path is resolved relative to the package root.
+```env
+# .env file - TicketBAI Credentials
+TICKETBAI_LICENSE=TB12345678
+TICKETBAI_NIF=B1111111A
+TICKETBAI_APP_NAME=My Application
+TICKETBAI_APP_VERSION=1.0.0
+TICKETBAI_CERT_PASSWORD=your_p12_password
+TICKETBAI_CERT_PATH=certificado.p12
 
-**Verification:** You can verify the patch has been applied by checking that the `vendor/barnetik/ticketbai/src/Barnetik/Tbai/AbstractTicketBai.php::sign()` method contains certificate validation checks.
+# TicketBAI Data Storage
+TICKETBAI_TABLE_NAME=invoices
+TICKETBAI_DISK=local
+TICKETBAI_DATA_KEY=ticketbai
 
-**Alternative:** If building a custom distribution or fork, you can also reference the patch directly from a raw URL:
-```json
-"patches": {
-    "barnetik/ticketbai": {
-        "Fix certificate validation": "https://raw.githubusercontent.com/yourusername/laravel-ticketbai/main/patches/barnetik-ticketbai-certificate-validation.patch"
-    }
-}
+# Optional: Customize column mappings (defaults work for standard Laravel tables)
+# TICKETBAI_COLUMN_ISSUER=issuer
+# TICKETBAI_COLUMN_NUMBER=provider_reference
+# TICKETBAI_COLUMN_PATH=path
+# TICKETBAI_COLUMN_DATA=data
 ```
 
-## Configuration
-
-### Service Configuration
-
-Add your TicketBAI credentials to `config/services.php`:
+In `config/services.php`:
 
 ```php
 'ticketbai' => [
-    'license' => env('TICKETBAI_LICENSE', ''),
-    'nif' => env('TICKETBAI_NIF', ''),
-    'appName' => env('TICKETBAI_APP_NAME', ''),
-    'appVersion' => env('TICKETBAI_APP_VERSION', ''),
-    'certPassword' => env('TICKETBAI_CERT_PASSWORD', ''),
+    'license' => env('TICKETBAI_LICENSE'),
+    'nif' => env('TICKETBAI_NIF'),
+    'appName' => env('TICKETBAI_APP_NAME'),
+    'appVersion' => env('TICKETBAI_APP_VERSION'),
+    'certPassword' => env('TICKETBAI_CERT_PASSWORD'),
     'disk' => env('TICKETBAI_DISK', 'local'),
 ],
 ```
 
-### Environment Variables
+### Advanced: Custom Table Mapping
 
-Add these to your `.env` file:
+If your invoices table has **different column names**, use environment variables to map them:
+
+**Example: Vivetix custom table structure**
 
 ```env
-TICKETBAI_LICENSE=TB12345678
-TICKETBAI_NIF=B1111111
-TICKETBAI_APP_NAME=My Application
-TICKETBAI_APP_VERSION=1.0
-TICKETBAI_CERT_PASSWORD=your_certificate_password
-TICKETBAI_DISK=local
-TICKETBAI_CERT_PATH=certificado.p12
+# In your .env file
+TICKETBAI_TABLE_NAME=invoices
+TICKETBAI_COLUMN_ISSUER=user_id
+TICKETBAI_COLUMN_NUMBER=provider_reference
+TICKETBAI_COLUMN_PATH=path
+TICKETBAI_COLUMN_DATA=data
+TICKETBAI_COLUMN_TERRITORY=
+TICKETBAI_COLUMN_SIGNATURE=
+TICKETBAI_COLUMN_SENT=
 ```
 
-Use `TICKETBAI_CERT_PATH` to override the certificate path. It can be a path relative to `storage_path()` (e.g. `certificado.p12` for `storage/certificado.p12`) or an absolute path (e.g. `/etc/certs/ticketbai.p12` on Linux).
+This maps:
+- Internal `issuer` → Table column `user_id`
+- Internal `number` → Table column `provider_reference`
+- `territory` and `signature` → Only stored in JSON `data` column (not as separate DB columns)
 
-### Certificate Setup
+### Publishing Configuration (Optional)
 
-By default the package looks for the X.509 certificate (`.p12`) at `storage/certificado.p12`. Set `TICKETBAI_CERT_PATH` in your `.env` to use a different path (relative to `storage_path()` or absolute). The certificate is used to sign invoices before submission.
+If you need **fine-grained control** or want to **document your custom setup**, publish the config file:
+
+```bash
+php artisan vendor:publish --tag=ticketbai-config
+```
+
+This creates `config/ticketbai.php` which you can customize directly:
+
+```php
+// config/ticketbai.php
+return [
+    'cert_path' => env('TICKETBAI_CERT_PATH', 'certificado.p12'),
+    'data_key' => env('TICKETBAI_DATA_KEY', 'ticketbai'),
+    
+    'table' => [
+        'name' => env('TICKETBAI_TABLE_NAME', 'invoices'),
+        'columns' => [
+            'issuer'     => env('TICKETBAI_COLUMN_ISSUER', 'issuer'),
+            'number'     => env('TICKETBAI_COLUMN_NUMBER', 'provider_reference'),
+            'territory'  => env('TICKETBAI_COLUMN_TERRITORY', null),
+            'signature'  => env('TICKETBAI_COLUMN_SIGNATURE', null),
+            'path'       => env('TICKETBAI_COLUMN_PATH', 'path'),
+            'data'       => env('TICKETBAI_COLUMN_DATA', 'data'),
+            'sent'       => env('TICKETBAI_COLUMN_SENT', null),
+            'created_at' => env('TICKETBAI_COLUMN_CREATED_AT', 'created_at'),
+            'updated_at' => env('TICKETBAI_COLUMN_UPDATED_AT', 'updated_at'),
+        ],
+    ],
+];
+```
+
+### Certificate Path
+
+The certificate path can be:
+- **Relative**: `certificado.p12` → Resolved to `storage/certificado.p12`
+- **Absolute Linux**: `/etc/certs/ticketbai.p12`
+- **Absolute Windows**: `C:\certs\ticketbai.p12`
+
+Set via: `TICKETBAI_CERT_PATH` environment variable
+
+**Validation:** The package automatically:
+- Strips leading/trailing whitespace from the path
+- Checks that the file exists
+- Verifies it's readable
+- Throws `CertificateNotFoundException` if invalid
+
+### Certificate Signature Prevention (barnetik/ticketbai Patch)
+
+This package automatically applies a security patch to `barnetik/ticketbai` that validates certificates before signing. The patch:
+
+- ✅ Validates P12 file existence and content before parsing
+- ✅ Checks `openssl_pkcs12_read()` return value and throws descriptive exceptions
+- ✅ Detects incorrect passwords and corrupt P12 files
+- ✅ Includes OpenSSL error messages for debugging
+- ✅ Prevents "Trying to access array offset on null" errors in PHP 8+
+
+**No additional configuration needed** — the patch applies automatically during `composer install`.
 
 ## Usage
 
@@ -476,7 +533,7 @@ php artisan ticketbai:resend --id=123
 php artisan ticketbai:resend --all --dry-run
 ```
 
-Resend requires **territory** and **path**: territory is read from `data[ticketbai_data_key]` (default `data->ticketbai`), path from the path column.
+Resend requires **territory** and **path**: territory is read from `data[data_key]` (default `data->ticketbai`), path from the path column.
 
 ## Troubleshooting
 
