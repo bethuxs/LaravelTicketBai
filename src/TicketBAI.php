@@ -236,7 +236,7 @@ class TicketBAI
 
     public function getCertificate(): \Barnetik\Tbai\PrivateKey
     {
-        $path = config('ticketbai.cert_path', 'certificado.p12');
+        $path = trim(config('ticketbai.cert_path', 'certificado.p12'));
         $certFile = (is_string($path) && $path !== '' && (str_starts_with($path, '/') || (DIRECTORY_SEPARATOR === '\\' && strlen($path) >= 2 && $path[1] === ':')))
             ? $path
             : storage_path($path);
