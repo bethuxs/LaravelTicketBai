@@ -29,7 +29,11 @@ class ResendInvoicesCommand extends Command
             return self::FAILURE;
         }
 
-        $sentColumn = Invoice::getColumnName('sent') ?? 'sent';
+        $sentColumn = Invoice::getColumnName('sent');
+        if ($sentColumn === null) {
+            $this->error('The "sent" column is not configured. Check config/ticketbai.php - TICKETBAI_COLUMN_SENT must not be null.');
+            return self::FAILURE;
+        }
 
         $query = Invoice::query()->whereNull($sentColumn);
 

@@ -88,24 +88,40 @@ class ResendInvoice implements ShouldQueue
         // Check API response
         if ($result->isCorrect()) {
             // SUCCESS: API accepted the invoice
-            $sentColumn = Invoice::getColumnName('sent') ?? 'sent';
-            $statusColumn = Invoice::getColumnName('status') ?? 'status';
-            $invoice->{$sentColumn} = date('Y-m-d H:i:s');
-            $invoice->{$statusColumn} = 'sent';
-            $invoice->save();
+            $sentColumn = Invoice::getColumnName('sent');
+            $statusColumn = Invoice::getColumnName('status');
+            
+            if ($sentColumn !== null) {
+                $invoice->{$sentColumn} = date('Y-m-d H:i:s');
+            }
+            if ($statusColumn !== null) {
+                $invoice->{$statusColumn} = 'sent';
+            }
+            
+            if ($sentColumn !== null || $statusColumn !== null) {
+                $invoice->save();
+            }
         } else {
             // ERROR: API rejected the invoice
             // Mark as failed, store error details, and fail job for retry
             $info = $result->content();
             Log::error('TicketBAI resend API error', ['response' => $info]);
             
-            $dataColumn = Invoice::getColumnName('data') ?? 'data';
-            $statusColumn = Invoice::getColumnName('status') ?? 'status';
+            $dataColumn = Invoice::getColumnName('data');
+            $statusColumn = Invoice::getColumnName('status');
             $payload = Invoice::getTicketBaiPayload($invoice);
             $payload['error'] = $info;
-            $invoice->{$dataColumn} = $payload;
-            $invoice->{$statusColumn} = 'failed';
-            $invoice->save();
+            
+            if ($dataColumn !== null) {
+                $invoice->{$dataColumn} = $payload;
+            }
+            if ($statusColumn !== null) {
+                $invoice->{$statusColumn} = 'failed';
+            }
+            
+            if ($dataColumn !== null || $statusColumn !== null) {
+                $invoice->save();
+            }
             
             $errorMessage = sprintf(
                 'TicketBAI resend for invoice [%s] rejected: %s',
