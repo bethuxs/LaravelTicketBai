@@ -89,37 +89,35 @@ class ResendInvoice implements ShouldQueue
         if ($result->isCorrect()) {
             // SUCCESS: API accepted the invoice
             $sentColumn = Invoice::getColumnName('sent');
-            $statusColumn = Invoice::getColumnName('status');
+            $dataColumn = Invoice::getColumnName('data');
             
             if ($sentColumn !== null) {
                 $invoice->{$sentColumn} = date('Y-m-d H:i:s');
             }
-            if ($statusColumn !== null) {
-                $invoice->{$statusColumn} = 'sent';
+            
+            // Store status in data JSON
+            if ($dataColumn !== null) {
+                $payload = Invoice::getTicketBaiPayload($invoice);
+                $payload['status'] = 'sent';
+                $invoice->{$dataColumn} = $payload;
             }
             
-            if ($sentColumn !== null || $statusColumn !== null) {
+            if ($sentColumn !== null || $dataColumn !== null) {
                 $invoice->save();
             }
         } else {
             // ERROR: API rejected the invoice
-            // Mark as failed, store error details, and fail job for retry
+            // Mark as failed, store error and status in data JSON, fail job for retry
             $info = $result->content();
             Log::error('TicketBAI resend API error', ['response' => $info]);
             
             $dataColumn = Invoice::getColumnName('data');
-            $statusColumn = Invoice::getColumnName('status');
             $payload = Invoice::getTicketBaiPayload($invoice);
             $payload['error'] = $info;
+            $payload['status'] = 'failed';
             
             if ($dataColumn !== null) {
                 $invoice->{$dataColumn} = $payload;
-            }
-            if ($statusColumn !== null) {
-                $invoice->{$statusColumn} = 'failed';
-            }
-            
-            if ($dataColumn !== null || $statusColumn !== null) {
                 $invoice->save();
             }
             

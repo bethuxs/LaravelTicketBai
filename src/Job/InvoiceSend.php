@@ -112,42 +112,39 @@ class InvoiceSend implements ShouldQueue
         // API response received - check result
         if ($result->isCorrect()) {
             // SUCCESS: API accepted the invoice
-            // Mark as sent with current timestamp (only if columns are configured)
+            // Mark as sent with current timestamp and store status in data JSON
             $sentColumn = Invoice::getColumnName('sent');
-            $statusColumn = Invoice::getColumnName('status');
+            $dataColumn = Invoice::getColumnName('data');
             
             if ($sentColumn !== null) {
                 $invoice->{$sentColumn} = date('Y-m-d H:i:s');
             }
-            if ($statusColumn !== null) {
-                $invoice->{$statusColumn} = 'sent';
+            
+            // Store status in data JSON
+            if ($dataColumn !== null) {
+                $payload = Invoice::getTicketBaiPayload($invoice);
+                $payload['status'] = 'sent';
+                $invoice->{$dataColumn} = $payload;
             }
             
-            // Only save if at least one column was modified
-            if ($sentColumn !== null || $statusColumn !== null) {
+            // Save if at least one column was modified
+            if ($sentColumn !== null || $dataColumn !== null) {
                 $invoice->save();
             }
         } else {
             // ERROR: API rejected the invoice
-            // Mark as failed, store error details, and fail job for potential retry
+            // Mark as failed, store error details and status in data JSON, fail job for retry
             $info = $result->content();
             Log::error('TicketBAI API returned error response', ['response' => $info]);
             
             $dataColumn = Invoice::getColumnName('data');
-            $statusColumn = Invoice::getColumnName('status');
             $payload = Invoice::getTicketBaiPayload($invoice);
             $payload['error'] = $info;
+            $payload['status'] = 'failed';
             
-            // Always save error to data column if it exists
+            // Save error and status to data column
             if ($dataColumn !== null) {
                 $invoice->{$dataColumn} = $payload;
-            }
-            // Mark as failed if status column exists
-            if ($statusColumn !== null) {
-                $invoice->{$statusColumn} = 'failed';
-            }
-            
-            if ($dataColumn !== null || $statusColumn !== null) {
                 $invoice->save();
             }
             
