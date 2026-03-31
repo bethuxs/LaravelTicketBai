@@ -8,6 +8,7 @@ use EBethus\LaravelTicketBAI\Invoice;
 use EBethus\LaravelTicketBAI\TicketBAI;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
@@ -19,6 +20,9 @@ use Illuminate\Support\Facades\Storage;
  * InvoiceSend Job
  *
  * Handles the submission of signed TicketBAI invoices to the Basque Country tax authority API.
+ *
+ * SECURITY NOTE: Only serializes the Invoice model, not the TicketBAI service.
+ * The TicketBAI service (with certificate password) is resolved from the container at execution time.
  *
  * Behavior:
  * - SUCCESS (isCorrect = true):
@@ -43,101 +47,97 @@ class InvoiceSend implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    /**
+     * Only the Invoice model is serialized, not the TicketBAI service.
+     * This prevents certificate passwords from being stored in the queue.
+     */
     public function __construct(
-        protected TicketBAI $ticketbai,
+        protected Invoice $invoice,
         protected ?string $disk = null
     ) {}
 
-    public function handle(): void
+    public function handle(TicketBAI $ticketbaiService): void
     {
-        $ticketbai = $this->ticketbai;
-        $ticketbai->copySignatureOnLocal();
-        $model = $ticketbai->getModel();
-        $tbai = $ticketbai->getTBAI();
-        $privateKey = $ticketbai->getCertificate();
-        $certPassword = $ticketbai->getCertPassword();
-        $debug = config('app.debug');
-        $test = ! App::environment('production');
-        $api = $this->createApi($tbai, $test, $debug);
+        $invoice = $this->invoice;
+        $payload = Invoice::getTicketBaiPayload($invoice);
+        $path = $payload['path'] ?? null;
+        
+        // Get path from payload or model column
+        if ($path === null) {
+            $pathCol = Invoice::getColumnName('path');
+            if ($pathCol !== null) {
+                $path = $invoice->{$pathCol};
+            }
+        }
 
+        if ($path === null) {
+            $this->fail(new \RuntimeException(
+                sprintf('TicketBAI invoice [%s]: path is empty or not found', $invoice->getKey())
+            ));
+            return;
+        }
+
+        // Load signed XML from storage
+        $diskName = $this->disk ?? $ticketbaiService->getDisk();
         try {
-            $result = $api->submitInvoice($tbai, $privateKey, $certPassword ?? '');
-        } catch (\Throwable $e) {
-            // Exception path: Certificate, connection, or validation errors
-            // Log error and fail job for retry
-            if ($model !== null) {
-                $payload = Invoice::getTicketBaiPayload($model);
-                $path = $payload['path'] ?? null;
-                if ($path === null) {
-                    $pathCol = Invoice::getColumnName('path');
-                    if ($pathCol !== null) {
-                        $path = $model->{$pathCol};
-                    }
-                }
-                $diskName = $this->disk ?? $ticketbai->getDisk();
-                if ($path !== null) {
-                    $xmlContent = Storage::disk($diskName)->get($path);
-                    Log::error('TicketBAI invoice send failed. XML content logged.', [
-                        'invoice_number' => $model->{Invoice::getColumnName('number') ?? 'number'},
-                        'exception' => $e->getMessage(),
-                        'xml_length' => strlen($xmlContent),
-                    ]);
-                }
-                $exception = new \Exception(
-                    sprintf(
-                        'TicketBAI send failed for invoice [%s]: %s',
-                        $model->getKey(),
-                        $e->getMessage()
-                    )
-                );
-                $this->fail($exception);
-            } else {
-                $this->fail($e);
+            $xmlContent = Storage::disk($diskName)->get($path);
+            $territory = $payload['territory'] ?? null;
+            
+            if (empty($territory)) {
+                throw new \RuntimeException('Territory is required in invoice data');
             }
 
+            // Reconstruct TicketBAI from XML for submission
+            $tbai = \Barnetik\Tbai\TicketBai::createFromXml($xmlContent, $territory, false);
+            $privateKey = $ticketbaiService->getCertificate();
+            $certPassword = $ticketbaiService->getCertPassword() ?? '';
+            $test = ! App::environment('production');
+            $debug = config('app.debug');
+            $api = \Barnetik\Tbai\Api::createForTicketBai($tbai, $test, $debug);
+
+            $result = $api->submitInvoice($tbai, $privateKey, $certPassword);
+        } catch (\Throwable $e) {
+            // Exception path: Certificate, connection, or validation errors
+            Log::error('TicketBAI invoice send failed', [
+                'invoice_id' => $invoice->getKey(),
+                'exception' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+
+            $this->fail($e);
             return;
         }
 
         // API response received - check result
-        if ($result->isCorrect() && $model !== null) {
+        if ($result->isCorrect()) {
             // SUCCESS: API accepted the invoice
             // Mark as sent with current timestamp
             $sentColumn = Invoice::getColumnName('sent') ?? 'sent';
             $statusColumn = Invoice::getColumnName('status') ?? 'status';
-            $model->{$sentColumn} = date('Y-m-d H:i:s');
-            $model->{$statusColumn} = 'sent';
-            $ticketbai->clearFile();
-            $model->save();
+            $invoice->{$sentColumn} = date('Y-m-d H:i:s');
+            $invoice->{$statusColumn} = 'sent';
+            $invoice->save();
         } else {
             // ERROR: API rejected the invoice
             // Mark as failed, store error details, and fail job for potential retry
             $info = $result->content();
             Log::error('TicketBAI API returned error response', ['response' => $info]);
             
-            if ($model !== null) {
-                $dataColumn = Invoice::getColumnName('data') ?? 'data';
-                $statusColumn = Invoice::getColumnName('status') ?? 'status';
-                $payload = Invoice::getTicketBaiPayload($model);
-                $payload['error'] = $info;
-                $model->{$dataColumn} = $payload;
-                $model->{$statusColumn} = 'failed';
-                $model->save();
-            }
+            $dataColumn = Invoice::getColumnName('data') ?? 'data';
+            $statusColumn = Invoice::getColumnName('status') ?? 'status';
+            $payload = Invoice::getTicketBaiPayload($invoice);
+            $payload['error'] = $info;
+            $invoice->{$dataColumn} = $payload;
+            $invoice->{$statusColumn} = 'failed';
+            $invoice->save();
             
             $errorMessage = sprintf(
                 'TicketBAI invoice [%s] rejected: %s',
-                $model?->getKey() ?? 'unknown',
+                $invoice->getKey(),
                 is_array($info) ? json_encode($info) : $info
             );
             $this->fail(new \Exception($errorMessage));
         }
-    }
-
-    /**
-     * Create the TicketBAI API instance. Override in tests to inject a mock.
-     */
-    protected function createApi(\Barnetik\Tbai\TicketBai $tbai, bool $test, bool $debug): \Barnetik\Tbai\Api
-    {
-        return \Barnetik\Tbai\Api::createForTicketBai($tbai, $test, $debug);
     }
 }

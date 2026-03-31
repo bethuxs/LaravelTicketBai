@@ -16,6 +16,15 @@ use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
+/**
+ * ResendInvoice Job
+ *
+ * Handles resending of previously signed invoices that may have failed initially.
+ * Behaves consistently with InvoiceSend for error handling.
+ *
+ * On success: Sets status='sent' and sent timestamp
+ * On error: Sets status='failed', stores error response, and fails the job for retry
+ */
 class ResendInvoice implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
@@ -40,45 +49,70 @@ class ResendInvoice implements ShouldQueue
         }
 
         if (empty($territory)) {
-            throw new \RuntimeException(
+            $this->fail(new \RuntimeException(
                 'Cannot resend invoice: territory is not configured or missing. Ensure data column contains territory under data_key.'
-            );
+            ));
+            return;
         }
 
         if (empty($path)) {
-            throw new \RuntimeException(
+            $this->fail(new \RuntimeException(
                 sprintf('Cannot resend invoice id [%s]: path is empty.', $invoice->getKey())
-            );
+            ));
+            return;
         }
 
         $diskName = $this->disk ?? $ticketbaiService->getDisk();
-        $xml = Storage::disk($diskName)->get($path);
-        $sentColumn = Invoice::getColumnName('sent') ?? 'sent';
-
-        $tbai = TicketBai::createFromXml($xml, $territory, false);
-        $privateKey = $ticketbaiService->getCertificate();
-        $certPassword = $ticketbaiService->getCertPassword() ?? '';
-        $test = ! App::environment('production');
-        $debug = config('app.debug');
-        $api = \Barnetik\Tbai\Api::createForTicketBai($tbai, $test, $debug);
-
+        
         try {
+            $xml = Storage::disk($diskName)->get($path);
+            $tbai = TicketBai::createFromXml($xml, $territory, false);
+            $privateKey = $ticketbaiService->getCertificate();
+            $certPassword = $ticketbaiService->getCertPassword() ?? '';
+            $test = ! App::environment('production');
+            $debug = config('app.debug');
+            $api = \Barnetik\Tbai\Api::createForTicketBai($tbai, $test, $debug);
+
             $result = $api->submitInvoice($tbai, $privateKey, $certPassword);
         } catch (\Throwable $e) {
             Log::error('TicketBAI resend failed', [
                 'invoice_id' => $invoice->getKey(),
                 'exception' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
             ]);
             $this->fail($e);
-
             return;
         }
 
+        // Check API response
         if ($result->isCorrect()) {
+            // SUCCESS: API accepted the invoice
+            $sentColumn = Invoice::getColumnName('sent') ?? 'sent';
+            $statusColumn = Invoice::getColumnName('status') ?? 'status';
             $invoice->{$sentColumn} = date('Y-m-d H:i:s');
+            $invoice->{$statusColumn} = 'sent';
             $invoice->save();
         } else {
-            Log::error('TicketBAI resend API error', ['content' => $result->content()]);
+            // ERROR: API rejected the invoice
+            // Mark as failed, store error details, and fail job for retry
+            $info = $result->content();
+            Log::error('TicketBAI resend API error', ['response' => $info]);
+            
+            $dataColumn = Invoice::getColumnName('data') ?? 'data';
+            $statusColumn = Invoice::getColumnName('status') ?? 'status';
+            $payload = Invoice::getTicketBaiPayload($invoice);
+            $payload['error'] = $info;
+            $invoice->{$dataColumn} = $payload;
+            $invoice->{$statusColumn} = 'failed';
+            $invoice->save();
+            
+            $errorMessage = sprintf(
+                'TicketBAI resend for invoice [%s] rejected: %s',
+                $invoice->getKey(),
+                is_array($info) ? json_encode($info) : $info
+            );
+            $this->fail(new \Exception($errorMessage));
         }
     }
 }

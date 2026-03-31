@@ -268,7 +268,6 @@ class TicketBAI
         }
         
         $this->signedFilename = storage_path('invoices/ticketbai/'.$this->invoiceNumber.'.xml');
-        \Illuminate\Support\Facades\Log::debug('Signed file: '.$this->signedFilename);
         $ticketbai->sign($privateKey, $certPassword, $this->signedFilename);
         $qr = new \Barnetik\Tbai\Qr($ticketbai, true);
         $qrURL = $qr->qrUrl();
@@ -281,7 +280,6 @@ class TicketBAI
     {
         $this->model = new Invoice;
         $model = $this->model;
-        \Illuminate\Support\Facades\Log::debug($this->signedFilename ?? '');
         $disk = Storage::disk($this->getDisk());
 
         $pathColumn = Invoice::getColumnName('path') ?? 'path';
@@ -310,7 +308,7 @@ class TicketBAI
         $model->fill($attributes);
         $model->save();
         $this->clearFile();
-        Job\InvoiceSend::dispatch($this);
+        Job\InvoiceSend::dispatch($model);
     }
 
     public function copySignatureOnLocal(): void
