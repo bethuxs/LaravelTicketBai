@@ -17,6 +17,14 @@ abstract class TestCase extends OrchestraTestCase
      */
     protected function setUp(): void
     {
+        // Load stubs for missing Barnetik classes
+        if (! class_exists(\Barnetik\Tbai\Fingerprint\Vendor::class)) {
+            require_once __DIR__.'/stubs/Barnetik/Tbai/Fingerprint/Vendor.php';
+        }
+        if (! class_exists(\Barnetik\Tbai\TicketBai::class)) {
+            require_once __DIR__.'/stubs/Barnetik/Tbai/TicketBai.php';
+        }
+        
         parent::setUp();
 
         // Run migrations
