@@ -174,4 +174,62 @@ class TicketBAITest extends TestCase
         ]);
         $ticketbai->getCertificate();
     }
+
+    /** @test */
+    public function invoice_number_is_generated_and_truncated_to_20_chars()
+    {
+        $ticketbai = new TicketBAI([]);
+
+        // Use reflection to access the protected getInvoiceNumber method
+        $reflection = new \ReflectionClass($ticketbai);
+        $method = $reflection->getMethod('getInvoiceNumber');
+        $method->setAccessible(true);
+
+        $invoiceNumber = $method->invoke($ticketbai);
+
+        // Verify it's exactly 20 characters
+        $this->assertIsString($invoiceNumber);
+        $this->assertSame(20, strlen($invoiceNumber), 
+            'Invoice number must be exactly 20 characters (ULID truncated). Got: '.$invoiceNumber);
+    }
+
+    /** @test */
+    public function invoice_number_is_cached_after_first_generation()
+    {
+        $ticketbai = new TicketBAI([]);
+
+        // Use reflection to access the protected getInvoiceNumber method
+        $reflection = new \ReflectionClass($ticketbai);
+        $method = $reflection->getMethod('getInvoiceNumber');
+        $method->setAccessible(true);
+
+        // First call generates the number
+        $first = $method->invoke($ticketbai);
+        
+        // Second call should return the same value (not regenerated)
+        $second = $method->invoke($ticketbai);
+
+        $this->assertSame($first, $second, 
+            'Invoice number should be cached and not regenerated on subsequent calls');
+    }
+
+    /** @test */
+    public function invoice_number_is_valid_ulid_prefix()
+    {
+        $ticketbai = new TicketBAI([]);
+
+        // Use reflection to access the protected getInvoiceNumber method
+        $reflection = new \ReflectionClass($ticketbai);
+        $method = $reflection->getMethod('getInvoiceNumber');
+        $method->setAccessible(true);
+
+        $invoiceNumber = $method->invoke($ticketbai);
+
+        // ULID characters are alphanumeric (0-9A-Z)
+        $this->assertMatchesRegularExpression(
+            '/^[0-9A-Z]{20}$/',
+            $invoiceNumber,
+            'Invoice number should be 20 alphanumeric characters (ULID format)'
+        );
+    }
 }
