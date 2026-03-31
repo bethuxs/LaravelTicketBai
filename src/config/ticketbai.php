@@ -21,7 +21,7 @@ return [
     | TicketBAI Payload Key in JSON "data" Column
     |--------------------------------------------------------------------------
     |
-    | The TicketBAI signature and territory are always stored in the generic
+    | The TicketBAI signature, territory, and status are stored in the generic
     | `data` JSON column under this key (for signature chaining/"encadenamiento").
     | The file path is always stored in the `path` column separately.
     |
@@ -32,6 +32,8 @@ return [
     |   'data_key' => 'my_invoices'
     |   → Signature stored at: data->my_invoices->signature
     |   → Territory stored at: data->my_invoices->territory
+    |   → Status stored at: data->my_invoices->status (sent/failed)
+    |   → Error stored at: data->my_invoices->error (if submission failed)
     |
     */
     'data_key' => env('TICKETBAI_DATA_KEY', 'ticketbai'),
@@ -54,6 +56,10 @@ return [
     | ├─ sent         (optional) - Timestamp when sent to TicketBAI API
     | ├─ created_at   (optional) - Creation timestamp
     | └─ updated_at   (optional) - Update timestamp
+    |
+    | NOTE: Invoice status ('sent'/'failed') and error details are always stored
+    | in the JSON 'data' column under the configured data_key, not as separate columns.
+    | Example: data->ticketbai->status or data->ticketbai->error
     |
     | Set to NULL to skip storing that value (e.g., 'territory' => NULL)
     | meaning the data will only be stored in the JSON 'data' column.
