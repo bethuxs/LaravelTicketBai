@@ -258,6 +258,15 @@ class InvoiceController extends Controller
             );
         }
 
+        // IMPORTANT: Store buyer data BEFORE generating invoice
+        $this->ticketbai->data([
+            'buyer_name' => $request->buyer_name,
+            'buyer_cif' => $request->buyer_cif,
+            'buyer_address' => $request->buyer_address,
+            'buyer_email' => $request->buyer_email,
+            'transaction_id' => $request->transaction_id,
+        ]);
+
         $qrUrl = $this->ticketbai->invoice(
             territory: 'BIZKAIA',
             description: $request->description
@@ -268,19 +277,27 @@ class InvoiceController extends Controller
 }
 ```
 
-### Adding Extra Data
+### Adding Extra Data to Invoices
 
-You can attach additional JSON data to invoices:
+You can attach additional JSON data to invoices. **Important:** Call `data()` BEFORE calling `invoice()`:
 
 ```php
+// Always attach buyer data BEFORE generating the invoice
 $ticketbai->data([
+    'taxname' => 'Alberto Berroteran',
+    'cif' => 'A12345678',
+    'address' => 'Calle Principal 123',
+    'emailInvoice' => 'customer@example.com',
     'order_id' => 12345,
     'customer_id' => 67890,
     'custom_field' => 'value'
 ]);
+
+// NOW generate and sign the invoice
+$qrUrl = $ticketbai->invoice('BIZKAIA', 'Invoice description');
 ```
 
-This data will be stored in the `data` column if configured (see [Database Configuration](#database-configuration)).
+This data will be stored in the `data` column as JSON if configured (see [Database Configuration](#database-configuration)). The `data` column is the **only place to store buyer information** for later retrieval.
 
 ## Database Configuration
 

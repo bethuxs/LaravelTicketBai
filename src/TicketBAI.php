@@ -138,7 +138,9 @@ class TicketBAI
 
     protected function getInvoiceNumber(): string
     {
-        $this->invoiceNumber = (string) Str::ulid();
+        if ($this->invoiceNumber === null) {
+            $this->invoiceNumber = substr((string) Str::ulid(), 0, 20);
+        }
 
         return $this->invoiceNumber;
     }
