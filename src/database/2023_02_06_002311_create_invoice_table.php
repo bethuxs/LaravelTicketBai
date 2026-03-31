@@ -19,7 +19,7 @@ class CreateInvoiceTable extends Migration
             $table->unsignedInteger('issuer');
             $table->string('provider_reference', 255);
             $table->json('data')->nullable();
-            $table->string('status', 1024)->nullable();
+            $table->string('status', 20)->nullable();
             $table->datetime('sent')->nullable();
             $table->timestamps();
         });
