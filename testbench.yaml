@@ -1,0 +1,8 @@
+---
+env:
+  APP_ENV: testing
+  CACHE_DRIVER: array
+  SESSION_DRIVER: array
+
+providers:
+  - EBethus\LaravelTicketBAI\TicketBAIProvider

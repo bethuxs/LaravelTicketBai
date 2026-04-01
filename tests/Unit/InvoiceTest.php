@@ -2,122 +2,95 @@
 
 declare(strict_types=1);
 
-namespace EBethus\LaravelTicketBAI\Tests\Unit;
-
 use EBethus\LaravelTicketBAI\Invoice;
 use EBethus\LaravelTicketBAI\Tests\TestCase;
 
-class InvoiceTest extends TestCase
-{
-    /** @test */
-    public function it_uses_configured_table_name()
-    {
-        config(['ticketbai.table.name' => 'custom_invoices']);
+uses(TestCase::class);
 
-        $invoice = new Invoice;
-        $this->assertEquals('custom_invoices', $invoice->getTable());
-    }
+test('it uses configured table name', function () {
+    config(['ticketbai.table.name' => 'custom_invoices']);
 
-    /** @test */
-    public function it_returns_default_table_name_when_not_configured()
-    {
-        config(['ticketbai.table.name' => null]);
+    $invoice = new Invoice;
+    expect($invoice->getTable())->toBe('custom_invoices');
+});
 
-        $invoice = new Invoice;
-        $this->assertEquals('invoices', $invoice->getTable());
-    }
+test('it returns default table name when not configured', function () {
+    config(['ticketbai.table.name' => null]);
 
-    /** @test */
-    public function it_returns_configured_column_name()
-    {
-        config(['ticketbai.table.columns.issuer' => 'transaction_id']);
+    $invoice = new Invoice;
+    expect($invoice->getTable())->toBe('invoices');
+});
 
-        $this->assertEquals('transaction_id', Invoice::getColumnName('issuer'));
-    }
+test('it returns configured column name', function () {
+    config(['ticketbai.table.columns.issuer' => 'transaction_id']);
 
-    /** @test */
-    public function it_returns_default_column_name_when_not_configured()
-    {
-        config(['ticketbai.table.columns' => []]);
+    expect(Invoice::getColumnName('issuer'))->toBe('transaction_id');
+});
 
-        $this->assertEquals('issuer', Invoice::getColumnName('issuer'));
-    }
+test('it returns default column name when not configured', function () {
+    config(['ticketbai.table.columns' => []]);
 
-    /** @test */
-    public function it_returns_null_for_optional_data_column_when_not_configured()
-    {
-        config(['ticketbai.table.columns' => []]);
+    expect(Invoice::getColumnName('issuer'))->toBe('issuer');
+});
 
-        $this->assertNull(Invoice::getColumnName('data'));
-    }
+test('it returns null for optional data column when not configured', function () {
+    config(['ticketbai.table.columns' => []]);
 
-    /** @test */
-    public function it_can_get_all_column_mappings()
-    {
-        $columns = [
-            'issuer' => 'transaction_id',
-            'number' => 'invoice_number',
-        ];
+    expect(Invoice::getColumnName('data'))->toBeNull();
+});
 
-        config(['ticketbai.table.columns' => $columns]);
+test('it can get all column mappings', function () {
+    $columns = [
+        'issuer' => 'transaction_id',
+        'number' => 'invoice_number',
+    ];
 
-        $this->assertEquals($columns, Invoice::getColumnMappings());
-    }
+    config(['ticketbai.table.columns' => $columns]);
 
-    /** @test */
-    public function get_ticketbai_payload_returns_nulls_when_data_has_no_key(): void
-    {
-        $invoice = new Invoice;
-        $invoice->path = 'ticketbai/foo.xml';
-        $invoice->data = null;
+    expect(Invoice::getColumnMappings())->toBe($columns);
+});
 
-        $payload = Invoice::getTicketBaiPayload($invoice);
+test('get ticketbai payload returns nulls when data has no key', function () {
+    $invoice = new Invoice;
+    $invoice->path = 'ticketbai/foo.xml';
+    $invoice->data = null;
 
-        $this->assertSame('ticketbai/foo.xml', $payload['path']);
-        $this->assertNull($payload['signature']);
-        $this->assertNull($payload['territory']);
-    }
+    $payload = Invoice::getTicketBaiPayload($invoice);
 
-    /** @test */
-    public function get_ticketbai_data_key_throws_when_empty(): void
-    {
-        config(['ticketbai.data_key' => '']);
+    expect($payload['path'])->toBe('ticketbai/foo.xml');
+    expect($payload['signature'])->toBeNull();
+    expect($payload['territory'])->toBeNull();
+});
 
-        $this->expectException(\EBethus\LaravelTicketBAI\Exceptions\InvalidConfigurationException::class);
-        $this->expectExceptionMessage('TICKETBAI_DATA_KEY cannot be empty');
+test('get ticketbai data key throws when empty', function () {
+    config(['ticketbai.data_key' => '']);
 
-        Invoice::getTicketBaiDataKey();
-    }
+    expect(fn () => Invoice::getTicketBaiDataKey())
+        ->toThrow(\EBethus\LaravelTicketBAI\Exceptions\InvalidConfigurationException::class);
+});
 
-    /** @test */
-    public function get_ticketbai_data_key_throws_when_null(): void
-    {
-        config(['ticketbai.data_key' => null]);
+test('get ticketbai data key throws when null', function () {
+    config(['ticketbai.data_key' => null]);
 
-        $this->expectException(\EBethus\LaravelTicketBAI\Exceptions\InvalidConfigurationException::class);
-        $this->expectExceptionMessage('TICKETBAI_DATA_KEY cannot be empty');
+    expect(fn () => Invoice::getTicketBaiDataKey())
+        ->toThrow(\EBethus\LaravelTicketBAI\Exceptions\InvalidConfigurationException::class);
+});
 
-        Invoice::getTicketBaiDataKey();
-    }
+test('get ticketbai payload reads from data key', function () {
+    config(['ticketbai.data_key' => 'ticketbai']);
+    $invoice = new Invoice;
+    $invoice->path = 'ticketbai/bar.xml';
+    $invoice->data = [
+        'ticketbai' => [
+            'signature' => 'chain-sig',
+            'territory' => '01',
+        ],
+        'order_id' => 42,
+    ];
 
-    /** @test */
-    public function get_ticketbai_payload_reads_from_data_key(): void
-    {
-        config(['ticketbai.data_key' => 'ticketbai']);
-        $invoice = new Invoice;
-        $invoice->path = 'ticketbai/bar.xml';
-        $invoice->data = [
-            'ticketbai' => [
-                'signature' => 'chain-sig',
-                'territory' => '01',
-            ],
-            'order_id' => 42,
-        ];
+    $payload = Invoice::getTicketBaiPayload($invoice);
 
-        $payload = Invoice::getTicketBaiPayload($invoice);
-
-        $this->assertSame('ticketbai/bar.xml', $payload['path']);
-        $this->assertSame('chain-sig', $payload['signature']);
-        $this->assertSame('01', $payload['territory']);
-    }
-}
+    expect($payload['path'])->toBe('ticketbai/bar.xml');
+    expect($payload['signature'])->toBe('chain-sig');
+    expect($payload['territory'])->toBe('01');
+});

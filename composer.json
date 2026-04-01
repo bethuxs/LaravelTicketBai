@@ -9,7 +9,9 @@
         "cweagans/composer-patches": "^1.7"
     },
     "require-dev": {
-        "phpunit/phpunit": "^9.5|^10.0",
+        "phpunit/phpunit": "^10.5",
+        "pestphp/pest": "^2.0",
+        "pestphp/pest-plugin-laravel": "^2.0",
         "orchestra/testbench": "^7.0|^8.0|^9.0|^10.0",
         "phpstan/phpstan": "^1.10",
         "laravel/pint": "^1.13",
@@ -35,11 +37,12 @@
     "minimum-stability": "dev",
     "config": {
         "allow-plugins": {
-            "cweagans/composer-patches": true
+            "cweagans/composer-patches": true,
+            "pestphp/pest-plugin": true
         }
     },
     "scripts": {
-        "test": "phpunit",
+        "test": "pest",
         "analyse": "phpstan analyse",
         "format": "pint"
     },

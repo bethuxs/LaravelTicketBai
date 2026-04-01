@@ -2,234 +2,178 @@
 
 declare(strict_types=1);
 
-namespace EBethus\LaravelTicketBAI\Tests\Unit;
-
 use EBethus\LaravelTicketBAI\Exceptions\CertificateNotFoundException;
 use EBethus\LaravelTicketBAI\Exceptions\InvalidTerritoryException;
-use EBethus\LaravelTicketBAI\Tests\TestCase;
 use EBethus\LaravelTicketBAI\TicketBAI;
+use EBethus\LaravelTicketBAI\Tests\TestCase;
 use Illuminate\Support\Facades\Storage;
 
-class TicketBAITest extends TestCase
-{
-    protected function setUp(): void
-    {
-        parent::setUp();
+uses(TestCase::class);
 
-        Storage::fake('local');
-    }
+beforeEach(function () {
+    Storage::fake('local');
+});
 
-    /** @test */
-    public function it_can_be_instantiated()
-    {
-        $config = [
-            'license' => 'TEST_LICENSE',
-            'nif' => 'B12345678',
-            'appName' => 'Test App',
-            'appVersion' => '1.0',
-            'certPassword' => 'test_password',
-            'disk' => 'local',
-        ];
+test('it can be instantiated', function () {
+    $config = [
+        'license' => 'TEST_LICENSE',
+        'nif' => 'B12345678',
+        'appName' => 'Test App',
+        'appVersion' => '1.0',
+        'certPassword' => 'test_password',
+        'disk' => 'local',
+    ];
 
-        $ticketbai = new TicketBAI($config);
+    $ticketbai = new TicketBAI($config);
 
-        $this->assertInstanceOf(TicketBAI::class, $ticketbai);
-    }
+    expect($ticketbai)->toBeInstanceOf(TicketBAI::class);
+});
 
-    /** @test */
-    public function it_can_set_vendor()
-    {
-        $ticketbai = new TicketBAI([]);
-        $ticketbai->setVendor('LICENSE', 'B12345678', 'App Name', '1.0');
+test('it can set vendor', function () {
+    $ticketbai = new TicketBAI([]);
+    $ticketbai->setVendor('LICENSE', 'B12345678', 'App Name', '1.0');
 
-        $this->assertTrue(true); // If no exception is thrown, vendor is set
-    }
+    expect(true)->toBeTrue();
+});
 
-    /** @test */
-    public function it_can_set_issuer()
-    {
-        $ticketbai = new TicketBAI([]);
-        $ticketbai->issuer('B12345678', 'Company Name', 1);
+test('it can set issuer', function () {
+    $ticketbai = new TicketBAI([]);
+    $ticketbai->issuer('B12345678', 'Company Name', 1);
 
-        $this->assertTrue(true); // If no exception is thrown, issuer is set
-    }
+    expect(true)->toBeTrue();
+});
 
-    /** @test */
-    public function it_can_set_vat()
-    {
-        $ticketbai = new TicketBAI([]);
-        $ticketbai->setVat(21);
+test('it can set vat', function () {
+    $ticketbai = new TicketBAI([]);
+    $ticketbai->setVat(21);
 
-        $this->assertTrue(true); // If no exception is thrown, VAT is set
-    }
+    expect(true)->toBeTrue();
+});
 
-    /** @test */
-    public function it_can_add_items()
-    {
-        $ticketbai = new TicketBAI([]);
-        $ticketbai->setVat(21);
-        $ticketbai->add('Product', 100.00, 2);
+test('it can add items', function () {
+    $ticketbai = new TicketBAI([]);
+    $ticketbai->setVat(21);
+    $ticketbai->add('Product', 100.00, 2);
 
-        $this->assertTrue(true); // If no exception is thrown, item is added
-    }
+    expect(true)->toBeTrue();
+});
 
-    /** @test */
-    public function it_throws_exception_when_adding_item_without_vat()
-    {
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('VAT percentage not set');
-
+test('it throws exception when adding item without vat', function () {
+    expect(function () {
         $ticketbai = new TicketBAI([]);
         $ticketbai->add('Product', 100.00, 2);
-    }
+    })->toThrow(\RuntimeException::class, 'VAT percentage not set');
+});
 
-    /** @test */
-    public function it_throws_exception_when_adding_item_with_invalid_price(): void
-    {
-        $this->expectException(\TypeError::class);
-
+test('it throws exception when adding item with invalid price', function () {
+    expect(function () {
         $ticketbai = new TicketBAI([]);
         $ticketbai->setVat(21);
         $ticketbai->add('Product', 'invalid', 2);
-    }
+    })->toThrow(\TypeError::class);
+});
 
-    /** @test */
-    public function it_can_set_extra_data()
-    {
+test('it can set extra data', function () {
+    $ticketbai = new TicketBAI([]);
+    $ticketbai->data(['key' => 'value']);
+
+    expect(true)->toBeTrue();
+});
+
+test('it can get column name for optional signature', function () {
+    config(['ticketbai.table.columns.signature' => null]);
+
+    $ticketbai = new TicketBAI([]);
+    expect(true)->toBeTrue();
+});
+
+test('it returns disk from config or local', function () {
+    $ticketbai = new TicketBAI(['license' => 'L', 'nif' => 'B1', 'appName' => 'A', 'appVersion' => '1', 'certPassword' => 'p', 'disk' => 'local']);
+    expect($ticketbai->getDisk())->toBe('local');
+
+    $ticketbaiCustom = new TicketBAI(['license' => 'L', 'nif' => 'B1', 'appName' => 'A', 'appVersion' => '1', 'certPassword' => 'p', 'disk' => 's3']);
+    expect($ticketbaiCustom->getDisk())->toBe('s3');
+
+    $ticketbaiEmpty = new TicketBAI([]);
+    expect($ticketbaiEmpty->getDisk())->toBe('local');
+});
+
+test('it accepts territory code 01 02 03 as valid', function () {
+    config(['ticketbai.cert_path' => __DIR__.'/../stubs/nonexistent.p12']);
+
+    foreach (['01', '02', '03'] as $code) {
         $ticketbai = new TicketBAI([]);
-        $ticketbai->data(['key' => 'value']);
-
-        $this->assertTrue(true); // If no exception is thrown, data is set
-    }
-
-    /** @test */
-    public function it_can_get_column_name_for_optional_signature()
-    {
-        config(['ticketbai.table.columns.signature' => null]);
-
-        $ticketbai = new TicketBAI([]);
-        // This should not throw an error even if signature is null
-        $this->assertTrue(true);
-    }
-
-    /** @test */
-    public function it_returns_disk_from_config_or_local()
-    {
-        $ticketbai = new TicketBAI(['license' => 'L', 'nif' => 'B1', 'appName' => 'A', 'appVersion' => '1', 'certPassword' => 'p', 'disk' => 'local']);
-        $this->assertSame('local', $ticketbai->getDisk());
-
-        $ticketbaiCustom = new TicketBAI(['license' => 'L', 'nif' => 'B1', 'appName' => 'A', 'appVersion' => '1', 'certPassword' => 'p', 'disk' => 's3']);
-        $this->assertSame('s3', $ticketbaiCustom->getDisk());
-
-        $ticketbaiEmpty = new TicketBAI([]);
-        $this->assertSame('local', $ticketbaiEmpty->getDisk());
-    }
-
-    /** @test */
-    public function it_accepts_territory_code_01_02_03_as_valid(): void
-    {
-        config(['ticketbai.cert_path' => __DIR__.'/../stubs/nonexistent.p12']);
-
-        foreach (['01', '02', '03'] as $code) {
-            $ticketbai = new TicketBAI([]);
-            $ticketbai->setVendor('L', 'B1', 'App', '1.0');
-            $ticketbai->issuer('B12345678', 'Company', 1);
-            $ticketbai->setVat(21);
-            $ticketbai->add('Item', 10.0, 1);
-            try {
-                $ticketbai->invoice($code, 'Test');
-            } catch (CertificateNotFoundException $e) {
-                $this->assertStringContainsString('not found or not readable', $e->getMessage());
-                continue;
-            }
-            $this->fail('Expected CertificateNotFoundException when using territory code '.$code);
+        $ticketbai->setVendor('L', 'B1', 'App', '1.0');
+        $ticketbai->issuer('B12345678', 'Company', 1);
+        $ticketbai->setVat(21);
+        $ticketbai->add('Item', 10.0, 1);
+        try {
+            $ticketbai->invoice($code, 'Test');
+        } catch (CertificateNotFoundException $e) {
+            expect($e->getMessage())->toContain('not found or not readable');
+            continue;
         }
+        fail('Expected CertificateNotFoundException when using territory code '.$code);
     }
+});
 
-    /** @test */
-    public function it_throws_invalid_territory_exception_for_invalid_territory()
-    {
-        $this->expectException(InvalidTerritoryException::class);
-        $this->expectExceptionMessage('Territory "INVALID" is invalid');
-
+test('it throws invalid territory exception for invalid territory', function () {
+    expect(function () {
         $ticketbai = new TicketBAI([]);
         $ticketbai->setVendor('L', 'B1', 'App', '1.0');
         $ticketbai->issuer('B12345678', 'Company', 1);
         $ticketbai->setVat(21);
         $ticketbai->add('Item', 10.0, 1);
         $ticketbai->invoice('INVALID', 'Test');
-    }
+    })->toThrow(InvalidTerritoryException::class, 'Territory "INVALID" is invalid');
+});
 
-    /** @test */
-    public function it_throws_certificate_not_found_when_cert_file_missing()
-    {
-        config(['ticketbai.cert_path' => __DIR__.'/../stubs/nonexistent-cert.p12']);
+test('it throws certificate not found when cert file missing', function () {
+    config(['ticketbai.cert_path' => __DIR__.'/../stubs/nonexistent-cert.p12']);
 
-        $this->expectException(CertificateNotFoundException::class);
-        $this->expectExceptionMessage('TicketBAI certificate not found or not readable');
-
+    expect(function () {
         $ticketbai = new TicketBAI([
             'license' => 'L', 'nif' => 'B1', 'appName' => 'A', 'appVersion' => '1',
             'certPassword' => 'p',
         ]);
         $ticketbai->getCertificate();
-    }
+    })->toThrow(CertificateNotFoundException::class, 'TicketBAI certificate not found or not readable');
+});
 
-    /** @test */
-    public function invoice_number_is_generated_and_truncated_to_20_chars()
-    {
-        $ticketbai = new TicketBAI([]);
+test('invoice number is generated and truncated to 20 chars', function () {
+    $ticketbai = new TicketBAI([]);
 
-        // Use reflection to access the protected getInvoiceNumber method
-        $reflection = new \ReflectionClass($ticketbai);
-        $method = $reflection->getMethod('getInvoiceNumber');
-        $method->setAccessible(true);
+    $reflection = new \ReflectionClass($ticketbai);
+    $method = $reflection->getMethod('getInvoiceNumber');
+    $method->setAccessible(true);
 
-        $invoiceNumber = $method->invoke($ticketbai);
+    $invoiceNumber = $method->invoke($ticketbai);
 
-        // Verify it's exactly 20 characters
-        $this->assertIsString($invoiceNumber);
-        $this->assertSame(20, strlen($invoiceNumber), 
-            'Invoice number must be exactly 20 characters (ULID truncated). Got: '.$invoiceNumber);
-    }
+    expect($invoiceNumber)->toBeString();
+    expect(strlen($invoiceNumber))->toBe(20);
+});
 
-    /** @test */
-    public function invoice_number_is_cached_after_first_generation()
-    {
-        $ticketbai = new TicketBAI([]);
+test('invoice number is cached after first generation', function () {
+    $ticketbai = new TicketBAI([]);
 
-        // Use reflection to access the protected getInvoiceNumber method
-        $reflection = new \ReflectionClass($ticketbai);
-        $method = $reflection->getMethod('getInvoiceNumber');
-        $method->setAccessible(true);
+    $reflection = new \ReflectionClass($ticketbai);
+    $method = $reflection->getMethod('getInvoiceNumber');
+    $method->setAccessible(true);
 
-        // First call generates the number
-        $first = $method->invoke($ticketbai);
-        
-        // Second call should return the same value (not regenerated)
-        $second = $method->invoke($ticketbai);
+    $first = $method->invoke($ticketbai);
+    $second = $method->invoke($ticketbai);
 
-        $this->assertSame($first, $second, 
-            'Invoice number should be cached and not regenerated on subsequent calls');
-    }
+    expect($first)->toBe($second);
+});
 
-    /** @test */
-    public function invoice_number_is_valid_ulid_prefix()
-    {
-        $ticketbai = new TicketBAI([]);
+test('invoice number is valid ulid prefix', function () {
+    $ticketbai = new TicketBAI([]);
 
-        // Use reflection to access the protected getInvoiceNumber method
-        $reflection = new \ReflectionClass($ticketbai);
-        $method = $reflection->getMethod('getInvoiceNumber');
-        $method->setAccessible(true);
+    $reflection = new \ReflectionClass($ticketbai);
+    $method = $reflection->getMethod('getInvoiceNumber');
+    $method->setAccessible(true);
 
-        $invoiceNumber = $method->invoke($ticketbai);
+    $invoiceNumber = $method->invoke($ticketbai);
 
-        // ULID characters are alphanumeric (0-9A-Z)
-        $this->assertMatchesRegularExpression(
-            '/^[0-9A-Z]{20}$/',
-            $invoiceNumber,
-            'Invoice number should be 20 alphanumeric characters (ULID format)'
-        );
-    }
-}
+    expect($invoiceNumber)->toMatch('/^[0-9A-Z]{20}$/');
+});

@@ -6,18 +6,20 @@ namespace EBethus\LaravelTicketBAI\Tests;
 
 use EBethus\LaravelTicketBAI\TicketBAIProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Orchestra\Testbench\Concerns\WithWorkbench;
 use Orchestra\Testbench\TestCase as OrchestraTestCase;
 
 abstract class TestCase extends OrchestraTestCase
 {
     use RefreshDatabase;
+    use WithWorkbench;
 
     /**
      * Setup the test environment.
      */
     protected function setUp(): void
     {
-        // Load stubs for missing Barnetik classes
+        // Load stubs for missing Barnetik classes BEFORE parent::setUp()
         if (! class_exists(\Barnetik\Tbai\Fingerprint\Vendor::class)) {
             require_once __DIR__.'/stubs/Barnetik/Tbai/Fingerprint/Vendor.php';
         }
@@ -27,7 +29,7 @@ abstract class TestCase extends OrchestraTestCase
         
         parent::setUp();
 
-        // Run migrations
+        // Run migrations AFTER parent::setUp()
         $this->loadMigrationsFrom(__DIR__.'/../src/database');
     }
 

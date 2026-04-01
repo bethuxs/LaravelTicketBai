@@ -45,8 +45,8 @@ class Invoice extends Model
             $columns = [];
         }
 
-        // Optional: only 'data' can be disabled (column name override)
-        $optionalColumns = ['data'];
+        // Columns that can be disabled (column name set to null)
+        $optionalColumns = ['data', 'status'];
         if (in_array($internalColumn, $optionalColumns, true)) {
             $value = $columns[$internalColumn] ?? null;
             if ($value === null || $value === '') {

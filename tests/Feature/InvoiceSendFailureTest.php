@@ -2,197 +2,179 @@
 
 declare(strict_types=1);
 
-namespace EBethus\LaravelTicketBAI\Tests\Feature;
-
 use Barnetik\Tbai\Api;
 use Barnetik\Tbai\TicketBai as BarnetikTicketBai;
 use EBethus\LaravelTicketBAI\Invoice;
 use EBethus\LaravelTicketBAI\Job\InvoiceSend;
-use EBethus\LaravelTicketBAI\Tests\TestCase;
 use EBethus\LaravelTicketBAI\TicketBAI;
+use EBethus\LaravelTicketBAI\Tests\TestCase;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Mockery;
-use PHPUnit\Framework\Attributes\Test;
 
-class InvoiceSendFailureTest extends TestCase
-{
-    protected function setUp(): void
-    {
-        parent::setUp();
-        Storage::fake('local');
-        config(['ticketbai.cert_path' => __DIR__.'/../stubs/nonexistent.p12']);
-    }
+uses(TestCase::class);
 
-    #[Test]
-    public function certificate_not_found_throws_exception(): void
-    {
-        $path = 'ticketbai/signed.xml';
-        Storage::disk('local')->put($path, '<?xml version="1.0"?><root/>');
+beforeEach(function () {
+    Storage::fake('local');
+    config(['ticketbai.cert_path' => __DIR__.'/../stubs/nonexistent.p12']);
+});
 
-        $invoice = new Invoice();
-        $invoice->path = $path;
-        $invoice->issuer = 1;
-        $invoice->provider_reference = 'INV-SEND-1';
-        $invoice->data = ['ticketbai' => ['territory' => '01']];
-        $invoice->save();
+test('certificate not found throws exception', function () {
+    $path = 'ticketbai/signed.xml';
+    Storage::disk('local')->put($path, '<?xml version="1.0"?><root/>');
 
-        $job = new InvoiceSend($invoice);
-        $ticketbai = $this->app->make(TicketBAI::class);
+    $invoice = new Invoice();
+    $invoice->path = $path;
+    $invoice->issuer = 1;
+    $invoice->provider_reference = 'INV-SEND-1';
+    $invoice->data = ['ticketbai' => ['territory' => '01']];
+    $invoice->save();
 
-        $this->expectException(\Exception::class);
-        $job->handle($ticketbai);
-    }
+    $job = new InvoiceSend($invoice);
+    $ticketbai = app(TicketBAI::class);
 
-    #[Test]
-    public function api_exception_is_logged_and_job_fails(): void
-    {
-        Log::spy();
+    expect(fn () => $job->handle($ticketbai))->toThrow(\Exception::class);
+});
 
-        $path = 'ticketbai/signed.xml';
-        $xmlContent = '<?xml version="1.0"?><T:TicketBai xmlns:T="urn:ticketbai:emision"/>';
-        Storage::disk('local')->put($path, $xmlContent);
+test('api exception is logged and job fails', function () {
+    Log::spy();
 
-        $invoice = new Invoice();
-        $invoice->path = $path;
-        $invoice->issuer = 1;
-        $invoice->provider_reference = 'INV-API-FAIL';
-        $invoice->data = ['ticketbai' => ['territory' => '01']];
-        $invoice->save();
+    $path = 'ticketbai/signed.xml';
+    $xmlContent = '<?xml version="1.0"?><T:TicketBai xmlns:T="urn:ticketbai:emision"/>';
+    Storage::disk('local')->put($path, $xmlContent);
 
-        $ticketbai = $this->app->make(TicketBAI::class);
+    $invoice = new Invoice();
+    $invoice->path = $path;
+    $invoice->issuer = 1;
+    $invoice->provider_reference = 'INV-API-FAIL';
+    $invoice->data = ['ticketbai' => ['territory' => '01']];
+    $invoice->save();
 
-        // Create a test job with mocked API
-        $job = new class($invoice) extends InvoiceSend {
-            private Api $apiMock;
+    $ticketbai = app(TicketBAI::class);
 
-            public function setApiMock(Api $apiMock): self
-            {
-                $this->apiMock = $apiMock;
-                return $this;
-            }
+    // Create a test job with mocked API
+    $job = new class($invoice) extends InvoiceSend {
+        private Api $apiMock;
 
-            protected function createApi(BarnetikTicketBai $tbai, bool $test, bool $debug): Api
-            {
-                return $this->apiMock;
-            }
-        };
+        public function setApiMock(Api $apiMock): self
+        {
+            $this->apiMock = $apiMock;
+            return $this;
+        }
 
-        $apiMock = Mockery::mock(Api::class);
-        $apiMock->shouldReceive('submitInvoice')->andThrow(new \RuntimeException('API connection failed'));
-        $job->setApiMock($apiMock);
+        protected function createApi(BarnetikTicketBai $tbai, bool $test, bool $debug): Api
+        {
+            return $this->apiMock;
+        }
+    };
 
-        $this->expectException(\Exception::class);
-        $job->handle($ticketbai);
+    $apiMock = Mockery::mock(Api::class);
+    $apiMock->shouldReceive('submitInvoice')->andThrow(new \RuntimeException('API connection failed'));
+    $job->setApiMock($apiMock);
 
-        Log::shouldHaveReceived('error')->atLeast()->once();
-    }
+    expect(fn () => $job->handle($ticketbai))->toThrow(\Exception::class);
 
-    #[Test]
-    public function api_error_response_marks_invoice_as_failed(): void
-    {
-        Log::spy();
+    Log::shouldHaveReceived('error')->atLeast()->once();
+});
 
-        $path = 'ticketbai/signed.xml';
-        $xmlContent = '<?xml version="1.0"?><T:TicketBai xmlns:T="urn:ticketbai:emision"/>';
-        Storage::disk('local')->put($path, $xmlContent);
+test('api error response marks invoice as failed', function () {
+    Log::spy();
 
-        $invoice = new Invoice();
-        $invoice->path = $path;
-        $invoice->issuer = 1;
-        $invoice->provider_reference = 'INV-REJECTED';
-        $invoice->data = ['ticketbai' => ['territory' => '01']];
-        $invoice->save();
+    $path = 'ticketbai/signed.xml';
+    $xmlContent = '<?xml version="1.0"?><T:TicketBai xmlns:T="urn:ticketbai:emision"/>';
+    Storage::disk('local')->put($path, $xmlContent);
 
-        $ticketbai = $this->app->make(TicketBAI::class);
+    $invoice = new Invoice();
+    $invoice->path = $path;
+    $invoice->issuer = 1;
+    $invoice->provider_reference = 'INV-REJECTED';
+    $invoice->data = ['ticketbai' => ['territory' => '01']];
+    $invoice->save();
 
-        $resultMock = Mockery::mock(\Barnetik\Tbai\Response\SubmitResult::class);
-        $errorContent = [
-            'code' => '002',
-            'description' => 'Fichero no cumple el esquema XSD',
-        ];
-        $resultMock->shouldReceive('isCorrect')->andReturn(false);
-        $resultMock->shouldReceive('content')->andReturn($errorContent);
+    $ticketbai = app(TicketBAI::class);
 
-        $apiMock = Mockery::mock(Api::class);
-        $apiMock->shouldReceive('submitInvoice')->andReturn($resultMock);
+    $resultMock = Mockery::mock(\Barnetik\Tbai\Response\SubmitResult::class);
+    $errorContent = [
+        'code' => '002',
+        'description' => 'Fichero no cumple el esquema XSD',
+    ];
+    $resultMock->shouldReceive('isCorrect')->andReturn(false);
+    $resultMock->shouldReceive('content')->andReturn($errorContent);
 
-        $job = new class($invoice) extends InvoiceSend {
-            private Api $apiMock;
+    $apiMock = Mockery::mock(Api::class);
+    $apiMock->shouldReceive('submitInvoice')->andReturn($resultMock);
 
-            public function setApiMock(Api $apiMock): self
-            {
-                $this->apiMock = $apiMock;
-                return $this;
-            }
+    $job = new class($invoice) extends InvoiceSend {
+        private Api $apiMock;
 
-            protected function createApi(BarnetikTicketBai $tbai, bool $test, bool $debug): Api
-            {
-                return $this->apiMock;
-            }
-        };
+        public function setApiMock(Api $apiMock): self
+        {
+            $this->apiMock = $apiMock;
+            return $this;
+        }
 
-        $job->setApiMock($apiMock);
+        protected function createApi(BarnetikTicketBai $tbai, bool $test, bool $debug): Api
+        {
+            return $this->apiMock;
+        }
+    };
 
-        $this->expectException(\Exception::class);
-        $job->handle($ticketbai);
+    $job->setApiMock($apiMock);
 
-        $invoice->refresh();
-        $this->assertEquals('failed', $invoice->status);
-        $this->assertIsArray($invoice->data);
-        $this->assertArrayHasKey('error', $invoice->data);
-        $this->assertEquals($errorContent, $invoice->data['error']);
+    expect(fn () => $job->handle($ticketbai))->toThrow(\Exception::class);
 
-        Log::shouldHaveReceived('error')->atLeast()->once();
-    }
+    $invoice->refresh();
+    expect($invoice->status)->toBe('failed');
+    expect($invoice->data)->toBeArray();
+    expect($invoice->data)->toHaveKey('error');
+    expect($invoice->data['error'])->toBe($errorContent);
 
-    #[Test]
-    public function api_error_does_not_mark_invoice_as_sent(): void
-    {
-        $path = 'ticketbai/signed.xml';
-        $xmlContent = '<?xml version="1.0"?><T:TicketBai xmlns:T="urn:ticketbai:emision"/>';
-        Storage::disk('local')->put($path, $xmlContent);
+    Log::shouldHaveReceived('error')->atLeast()->once();
+});
 
-        $invoice = new Invoice();
-        $invoice->path = $path;
-        $invoice->issuer = 1;
-        $invoice->provider_reference = 'INV-NOT-SENT';
-        $invoice->data = ['ticketbai' => ['territory' => '01']];
-        $invoice->status = null;
-        $invoice->sent = null;
-        $invoice->save();
+test('api error does not mark invoice as sent', function () {
+    $path = 'ticketbai/signed.xml';
+    $xmlContent = '<?xml version="1.0"?><T:TicketBai xmlns:T="urn:ticketbai:emision"/>';
+    Storage::disk('local')->put($path, $xmlContent);
 
-        $ticketbai = $this->app->make(TicketBAI::class);
+    $invoice = new Invoice();
+    $invoice->path = $path;
+    $invoice->issuer = 1;
+    $invoice->provider_reference = 'INV-NOT-SENT';
+    $invoice->data = ['ticketbai' => ['territory' => '01']];
+    $invoice->status = null;
+    $invoice->sent = null;
+    $invoice->save();
 
-        $resultMock = Mockery::mock(\Barnetik\Tbai\Response\SubmitResult::class);
-        $resultMock->shouldReceive('isCorrect')->andReturn(false);
-        $resultMock->shouldReceive('content')->andReturn(['code' => '002']);
+    $ticketbai = app(TicketBAI::class);
 
-        $apiMock = Mockery::mock(Api::class);
-        $apiMock->shouldReceive('submitInvoice')->andReturn($resultMock);
+    $resultMock = Mockery::mock(\Barnetik\Tbai\Response\SubmitResult::class);
+    $resultMock->shouldReceive('isCorrect')->andReturn(false);
+    $resultMock->shouldReceive('content')->andReturn(['code' => '002']);
 
-        $job = new class($invoice) extends InvoiceSend {
-            private Api $apiMock;
+    $apiMock = Mockery::mock(Api::class);
+    $apiMock->shouldReceive('submitInvoice')->andReturn($resultMock);
 
-            public function setApiMock(Api $apiMock): self
-            {
-                $this->apiMock = $apiMock;
-                return $this;
-            }
+    $job = new class($invoice) extends InvoiceSend {
+        private Api $apiMock;
 
-            protected function createApi(BarnetikTicketBai $tbai, bool $test, bool $debug): Api
-            {
-                return $this->apiMock;
-            }
-        };
+        public function setApiMock(Api $apiMock): self
+        {
+            $this->apiMock = $apiMock;
+            return $this;
+        }
 
-        $job->setApiMock($apiMock);
+        protected function createApi(BarnetikTicketBai $tbai, bool $test, bool $debug): Api
+        {
+            return $this->apiMock;
+        }
+    };
 
-        $this->expectException(\Exception::class);
-        $job->handle($ticketbai);
+    $job->setApiMock($apiMock);
 
-        $invoice->refresh();
-        $this->assertNull($invoice->sent);
-        $this->assertEquals('failed', $invoice->status);
-    }
-}
+    expect(fn () => $job->handle($ticketbai))->toThrow(\Exception::class);
+
+    $invoice->refresh();
+    expect($invoice->sent)->toBeNull();
+    expect($invoice->status)->toBe('failed');
+});

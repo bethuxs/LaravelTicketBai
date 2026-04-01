@@ -2,68 +2,54 @@
 
 declare(strict_types=1);
 
-namespace EBethus\LaravelTicketBAI\Tests\Unit;
-
 use EBethus\LaravelTicketBAI\Invoice;
-use Orchestra\Testbench\TestCase;
+use EBethus\LaravelTicketBAI\Tests\TestCase;
 
-class InvoiceStatusTest extends TestCase
-{
-    protected function getPackageProviders($app)
-    {
-        return ['EBethus\LaravelTicketBAI\TicketBAIProvider'];
-    }
+uses(TestCase::class);
 
-    protected function getEnvironmentSetUp($app)
-    {
-        $app['config']->set('ticketbai.table.name', 'invoices');
-        $app['config']->set('ticketbai.table.columns', [
-            'issuer' => 'issuer',
-            'number' => 'provider_reference',
-            'path' => 'path',
-            'data' => 'data',
-            'sent' => 'sent',
-            'status' => 'status',
-        ]);
-    }
+beforeEach(function () {
+    // Reset config to default state before each test
+    app('config')->set('ticketbai.table.columns', [
+        'issuer' => 'issuer',
+        'number' => 'provider_reference',
+        'path' => 'path',
+        'data' => 'data',
+        'sent' => 'sent',
+        'created_at' => 'created_at',
+        'updated_at' => 'updated_at',
+    ]);
+});
 
-    /**
-     * Test that status column is configured
-     */
-    public function test_status_column_is_configured()
-    {
-        $statusColumn = Invoice::getColumnName('status');
-        $this->assertNotNull($statusColumn);
-        $this->assertEquals('status', $statusColumn);
-    }
+test('status column is configured', function () {
+    app('config')->set('ticketbai.table.columns', [
+        'issuer' => 'issuer',
+        'number' => 'provider_reference',
+        'status' => 'status',
+    ]);
+    
+    $statusColumn = Invoice::getColumnName('status');
+    expect($statusColumn)->not()->toBeNull();
+    expect($statusColumn)->toBe('status');
+});
 
-    /**
-     * Test that status column can be disabled
-     */
-    public function test_status_column_can_be_disabled()
-    {
-        config(['ticketbai.table.columns' => [
-            'issuer' => 'issuer',
-            'number' => 'provider_reference',
-            'status' => null,  // Disabled
-        ]]);
-        
-        $statusColumn = Invoice::getColumnName('status');
-        $this->assertNull($statusColumn);
-    }
+test('status column can be disabled', function () {
+    app('config')->set('ticketbai.table.columns', [
+        'issuer' => 'issuer',
+        'number' => 'provider_reference',
+        'status' => null,
+    ]);
+    
+    $statusColumn = Invoice::getColumnName('status');
+    expect($statusColumn)->toBeNull();
+});
 
-    /**
-     * Test that status column can have custom name
-     */
-    public function test_status_column_with_custom_name()
-    {
-        config(['ticketbai.table.columns' => [
-            'issuer' => 'issuer',
-            'number' => 'provider_reference',
-            'status' => 'invoice_status',  // Custom column name
-        ]]);
-        
-        $statusColumn = Invoice::getColumnName('status');
-        $this->assertEquals('invoice_status', $statusColumn);
-    }
-}
+test('status column can have custom name', function () {
+    app('config')->set('ticketbai.table.columns', [
+        'issuer' => 'issuer',
+        'number' => 'provider_reference',
+        'status' => 'invoice_status',
+    ]);
+    
+    $statusColumn = Invoice::getColumnName('status');
+    expect($statusColumn)->toBe('invoice_status');
+});

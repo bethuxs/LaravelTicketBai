@@ -2,88 +2,59 @@
 
 declare(strict_types=1);
 
-namespace EBethus\LaravelTicketBAI\Tests\Feature;
-
 use EBethus\LaravelTicketBAI\Invoice;
+use EBethus\LaravelTicketBAI\Tests\TestCase;
 use EBethus\LaravelTicketBAI\Job\InvoiceSend;
 use EBethus\LaravelTicketBAI\Job\ResendInvoice;
-use Orchestra\Testbench\TestCase;
 
-class InvoiceStatusPersistenceTest extends TestCase
-{
-    protected function getPackageProviders($app)
-    {
-        return ['EBethus\LaravelTicketBAI\TicketBAIProvider'];
-    }
+uses(TestCase::class);
 
-    protected function getEnvironmentSetUp($app)
-    {
-        $app['config']->set('ticketbai.table.name', 'invoices');
-        $app['config']->set('ticketbai.table.columns', [
-            'issuer' => 'issuer',
-            'number' => 'provider_reference',
-            'path' => 'path',
-            'data' => 'data',
-            'sent' => 'sent',
-            'status' => 'status',
-        ]);
-    }
+beforeEach(function () {
+    config(['ticketbai.table.name' => 'invoices']);
+    config(['ticketbai.table.columns' => [
+        'issuer' => 'issuer',
+        'number' => 'provider_reference',
+        'path' => 'path',
+        'data' => 'data',
+        'sent' => 'sent',
+        'status' => 'status',
+    ]]);
+});
 
-    /**
-     * Test that InvoiceSend job accepts Invoice model
-     */
-    public function test_invoice_send_accepts_invoice_model()
-    {
-        $invoice = new Invoice([
-            'issuer' => 1,
-            'provider_reference' => 'TEST001',
-            'path' => 'test/path.xml',
-            'data' => json_encode(['ticketbai' => ['signature' => 'sig', 'territory' => '02']]),
-        ]);
+test('invoice send job accepts invoice model', function () {
+    $invoice = new Invoice([
+        'issuer' => 1,
+        'provider_reference' => 'TEST001',
+        'path' => 'test/path.xml',
+        'data' => json_encode(['ticketbai' => ['signature' => 'sig', 'territory' => '02']]),
+    ]);
 
-        $job = new InvoiceSend($invoice);
-        $this->assertInstanceOf(InvoiceSend::class, $job);
-    }
+    $job = new InvoiceSend($invoice);
+    expect($job)->toBeInstanceOf(InvoiceSend::class);
+});
 
-    /**
-     * Test that ResendInvoice job accepts Invoice model
-     */
-    public function test_resend_invoice_accepts_invoice_model()
-    {
-        $invoice = new Invoice([
-            'issuer' => 1,
-            'provider_reference' => 'TEST002',
-            'path' => 'test/path.xml',
-            'data' => json_encode(['ticketbai' => ['signature' => 'sig', 'territory' => '02']]),
-        ]);
+test('resend invoice job accepts invoice model', function () {
+    $invoice = new Invoice([
+        'issuer' => 1,
+        'provider_reference' => 'TEST002',
+        'path' => 'test/path.xml',
+        'data' => json_encode(['ticketbai' => ['signature' => 'sig', 'territory' => '02']]),
+    ]);
 
-        $job = new ResendInvoice($invoice);
-        $this->assertInstanceOf(ResendInvoice::class, $job);
-    }
+    $job = new ResendInvoice($invoice);
+    expect($job)->toBeInstanceOf(ResendInvoice::class);
+});
 
-    /**
-     * Test valid status values according to TicketBAI spec
-     */
-    public function test_valid_status_values()
-    {
-        $validStatuses = ['sent', 'failed'];
-        
-        // Valid statuses
-        $this->assertContains('sent', $validStatuses);
-        $this->assertContains('failed', $validStatuses);
-        
-        // Only 2 valid states
-        $this->assertCount(2, $validStatuses);
-    }
+test('valid status values according to ticketbai spec', function () {
+    $validStatuses = ['sent', 'failed'];
+    
+    expect($validStatuses)->toContain('sent');
+    expect($validStatuses)->toContain('failed');
+    expect(count($validStatuses))->toBe(2);
+});
 
-    /**
-     * Test that status column name is retrievable from config
-     */
-    public function test_status_column_name_from_config()
-    {
-        $statusColumn = Invoice::getColumnName('status');
-        
-        // Should be 'status' when configured
-        $this->assertEquals('status', $statusColumn);
-    }
-}
+test('status column name is retrievable from config', function () {
+    $statusColumn = Invoice::getColumnName('status');
+    
+    expect($statusColumn)->toBe('status');
+});
