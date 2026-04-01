@@ -64,12 +64,14 @@ class ResendInvoice implements ShouldQueue
         
         try {
             $xml = Storage::disk($diskName)->get($path);
-            $tbai = TicketBai::createFromXml($xml, $territory, false);
+            $tbai = $this->createTicketBaiFromXml($xml, $territory);
             $privateKey = $ticketbaiService->getCertificate();
             $certPassword = $ticketbaiService->getCertPassword() ?? '';
             $test = ! App::environment('production');
             $debug = config('app.debug');
-            $api = \Barnetik\Tbai\Api::createForTicketBai($tbai, $test, $debug);
+            
+            // Create API instance (can be overridden by tests)
+            $api = $this->createApi($tbai, $test, $debug);
 
             $result = $api->submitInvoice($tbai, $privateKey, $certPassword);
         } catch (\Throwable $e) {
@@ -79,6 +81,26 @@ class ResendInvoice implements ShouldQueue
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
             ]);
+
+            // Mark invoice as failed when exception occurs
+            $statusColumn = Invoice::getColumnName('status');
+            $dataColumn = Invoice::getColumnName('data');
+            
+            if ($statusColumn !== null) {
+                $invoice->{$statusColumn} = 'failed';
+            }
+            
+            if ($dataColumn !== null) {
+                $payload = Invoice::getTicketBaiPayload($invoice);
+                $payload['error'] = $e->getMessage();
+                $payload['status'] = 'failed';
+                $invoice->{$dataColumn} = $payload;
+            }
+            
+            if ($statusColumn !== null || $dataColumn !== null) {
+                $invoice->save();
+            }
+
             $this->fail($e);
             return;
         }
@@ -137,5 +159,21 @@ class ResendInvoice implements ShouldQueue
             );
             $this->fail(new \Exception($errorMessage));
         }
+    }
+
+    /**
+     * Create API instance (protected for test mocking)
+     */
+    protected function createApi(\Barnetik\Tbai\TicketBai $tbai, bool $test, bool $debug): \Barnetik\Tbai\Api
+    {
+        return \Barnetik\Tbai\Api::createForTicketBai($tbai, $test, $debug);
+    }
+
+    /**
+     * Create TicketBAI from XML (protected for test mocking)
+     */
+    protected function createTicketBaiFromXml(string $xmlContent, string $territory): \Barnetik\Tbai\TicketBai
+    {
+        return TicketBai::createFromXml($xmlContent, $territory, false);
     }
 }
