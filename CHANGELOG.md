@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Domain-specific exceptions: `InvalidConfigurationException` for configuration errors, `CertificateNotFoundException` for missing certificates, `InvalidTerritoryException` for invalid territories.
+- Invoice status tracking with configurable `status` column (nullable, values: 'failed' when job fails).
+- Error persistence: API errors and exceptions now stored in invoice `data` column under `error` key for debugging.
+- Protected mockable methods in job classes (`createApi()`, `createTicketBaiFromXml()`) for easier testing.
+- Test suite migrated to Pest 2.x with 43+ passing tests covering invoice generation, error handling, and resend workflows.
 - `getDisk(): string` on `TicketBAI` to get the configured storage disk.
 - Territory validation in `invoice()`: only `ARABA`, `BIZKAIA`, `GIPUZKOA` accepted (case-insensitive).
 - `InvalidTerritoryException` and `CertificateNotFoundException` for clearer errors.
@@ -19,13 +24,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Config defaults: column names aligned with default migration (`issuer`, `number`, `signature`, `path`, `data`, `sent`). For custom tables use env vars (e.g. `TICKETBAI_COLUMN_ISSUER=transaction_id`).
+- **Job error handling**: Both `InvoiceSend` and `ResendInvoice` jobs now gracefully handle errors (no exception thrown to queue), instead setting invoice status to 'failed' and storing error details.
+- **ULID invoice number**: Truncated to 20 characters (TicketBAI XSD requirement); stored as-is in database for resend support.
+- **Test framework**: All tests migrated from PHPUnit to Pest 2.x with improved organization and clarity (Feature/Unit separation).
+- **Exception hierarchy**: Specific exceptions replace generic PHP exceptions for better error handling and debugging.
+- Config defaults: column names aligned with default migration (`issuer`, `number`, `signature`, `path`, `data`, `sent`, `status`). For custom tables use env vars (e.g. `TICKETBAI_COLUMN_ISSUER=transaction_id`).
 - `InvoiceSend` uses `TicketBAI::getDisk()` instead of config; on failure logs invoice number and exception and fails with a short message (no full XML in exception).
 - Territory is passed to barnetik as codes `01`, `02`, `03` (ARABA, BIZKAIA, GIPUZKOA); stored in DB as code for resend.
 
 ### Fixed
 
 - **InvoiceSend**: read XML from Storage disk instead of `file_get_contents($model->path)` (path is relative to disk).
+- **ULID truncation**: Invoice number now correctly truncated to 20 characters for TicketBAI XSD compliance (was being used at 26 chars).
+- **Test failures**: Fixed 6 failing tests after code quality improvements; updated job error handling and test mocking patterns.
+- **Security**: Removed unnecessary certificate validation bypass patch; proper error handling in place.
 - Typo: `simplyfyHeader()` renamed to `simplifyHeader()`.
 
 ## [1.0.0] - YYYY-MM-DD

@@ -32,6 +32,12 @@ A Laravel package for generating and submitting TicketBAI (Ticket BAI) invoices 
 - ✅ Support for multiple territories (Araba, Bizkaia, Gipuzkoa)
 - ✅ Automatic fingerprint calculation from previous invoices
 - ✅ Artisan command to resend failed/pending invoices (`ticketbai:resend`)
+- ✅ **Graceful error handling**: API errors and exceptions logged, invoices marked as failed
+- ✅ **Error persistence**: API errors and exception details stored in invoice data for debugging
+- ✅ **Invoice status tracking**: Optional status column to track invoice state (draft, failed, sent)
+- ✅ **Domain-specific exceptions**: `CertificateNotFoundException`, `InvalidTerritoryException`, `InvalidConfigurationException`
+- ✅ **Comprehensive test suite**: 43+ tests (Pest 2.x) covering all features and edge cases
+- ✅ **ULID invoice numbering**: Automatically truncated to 20 characters for XSD compliance
 
 ## Requirements
 
@@ -503,24 +509,49 @@ echo $model->path;               // XML file path
 
 ## Testing
 
+This package uses **Pest 2.x** for testing with 43+ comprehensive tests covering:
+
+- Invoice generation and storage
+- TicketBAI signature and QR code generation
+- Error handling and graceful job failure
+- Invoice resend workflows
+- Configuration and column mapping flexibility
+- ULID invoice number generation and truncation (20 chars)
+
 Run the test suite:
 
 ```bash
 composer test
 ```
 
-Or with PHPUnit directly:
+Or with Pest directly:
 
 ```bash
-./vendor/bin/phpunit
+./vendor/bin/pest
 ```
 
-Optional: run static analysis (PHPStan) and code style (Laravel Pint):
+### Test Structure
+
+- **Feature tests** (`tests/Feature/`): End-to-end scenarios (invoice creation, job dispatch, resend)
+- **Unit tests** (`tests/Unit/`): Component-level tests (TicketBAI, Invoice model, configuration)
+
+### Code Quality
+
+Optional: run static analysis and code style checks:
 
 ```bash
-composer analyse   # PHPStan
-composer format   # Pint (fixes style)
+composer analyse   # PHPStan (level 5)
+composer format    # Laravel Pint (fixes style)
 ```
+
+### Test Coverage Highlights
+
+✅ **43 tests passing** (100% of non-risky tests)  
+✅ **Job error handling**: API errors and exceptions gracefully handled (status='failed', error stored)  
+✅ **ULID truncation**: Invoice numbers automatically truncated to 20 characters  
+✅ **Resend workflow**: Re-queuing of previously signed invoices  
+✅ **Configuration**: Flexible column mapping via environment variables  
+✅ **Territory validation**: Only ARABA, BIZKAIA, GIPUZKOA allowed  
 
 ## Queue Configuration
 
