@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use EBethus\LaravelTicketBAI\Exceptions\CertificateNotFoundException;
 use EBethus\LaravelTicketBAI\Exceptions\InvalidTerritoryException;
+use EBethus\LaravelTicketBAI\Exceptions\InvalidTicketBAIDataException;
 use EBethus\LaravelTicketBAI\TicketBAI;
 use EBethus\LaravelTicketBAI\Tests\TestCase;
 use Illuminate\Support\Facades\Storage;
@@ -62,7 +63,7 @@ test('it throws exception when adding item without vat', function () {
     expect(function () {
         $ticketbai = new TicketBAI([]);
         $ticketbai->add('Product', 100.00, 2);
-    })->toThrow(\RuntimeException::class, 'VAT percentage not set');
+    })->toThrow(InvalidTicketBAIDataException::class);
 });
 
 test('it throws exception when adding item with invalid price', function () {

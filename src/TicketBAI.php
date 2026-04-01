@@ -11,6 +11,7 @@ use Barnetik\Tbai\Invoice\Data;
 use Barnetik\Tbai\Subject;
 use Barnetik\Tbai\ValueObject\Amount;
 use EBethus\LaravelTicketBAI\Exceptions\CertificateNotFoundException;
+use EBethus\LaravelTicketBAI\Exceptions\InvalidTicketBAIDataException;
 use EBethus\LaravelTicketBAI\Exceptions\InvalidTerritoryException;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -95,7 +96,7 @@ class TicketBAI
     protected function getFingerprint(): \Barnetik\Tbai\Fingerprint
     {
         if ($this->vendor === null) {
-            throw new \RuntimeException('Vendor not set');
+            throw InvalidTicketBAIDataException::vendorNotSet();
         }
 
         $issuerColumn = Invoice::getColumnName('issuer');
@@ -158,7 +159,7 @@ class TicketBAI
     protected function getData(string $description): Data
     {
         if ($this->items === []) {
-            throw new \RuntimeException('Not item present');
+            throw InvalidTicketBAIDataException::noItemsPresent();
         }
         $this->totalInvoice = array_reduce(
             $this->items,
@@ -185,7 +186,7 @@ class TicketBAI
     public function add(string $desc, float $unitPrice, float $q, ?float $discount = null): void
     {
         if ($this->vatPerc === null) {
-            throw new \RuntimeException('VAT percentage not set');
+            throw InvalidTicketBAIDataException::vatPercentageNotSet();
         }
         $unitAmount = new Amount($this->formatAmount($unitPrice * (100 - $this->vatPerc) / 100), 12, 8);
         $quantity = new Amount($this->formatAmount($q));

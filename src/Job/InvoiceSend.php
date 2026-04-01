@@ -6,6 +6,8 @@ namespace EBethus\LaravelTicketBAI\Job;
 
 use EBethus\LaravelTicketBAI\Invoice;
 use EBethus\LaravelTicketBAI\TicketBAI;
+use EBethus\LaravelTicketBAI\Exceptions\MissingInvoicePathException;
+use EBethus\LaravelTicketBAI\Exceptions\MissingTerritoryException;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\Model;
@@ -71,9 +73,7 @@ class InvoiceSend implements ShouldQueue
         }
 
         if ($path === null) {
-            $this->fail(new \RuntimeException(
-                sprintf('TicketBAI invoice [%s]: path is empty or not found', $invoice->getKey())
-            ));
+            $this->fail(MissingInvoicePathException::forInvoice($invoice->getKey()));
             return;
         }
 
@@ -84,7 +84,7 @@ class InvoiceSend implements ShouldQueue
             $territory = $payload['territory'] ?? null;
             
             if (empty($territory)) {
-                throw new \RuntimeException('Territory is required in invoice data');
+                throw MissingTerritoryException::inInvoiceData();
             }
 
             // Reconstruct TicketBAI from XML for submission

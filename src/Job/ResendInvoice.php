@@ -7,6 +7,8 @@ namespace EBethus\LaravelTicketBAI\Job;
 use Barnetik\Tbai\TicketBai;
 use EBethus\LaravelTicketBAI\Invoice;
 use EBethus\LaravelTicketBAI\TicketBAI as TicketBAIService;
+use EBethus\LaravelTicketBAI\Exceptions\MissingInvoicePathException;
+use EBethus\LaravelTicketBAI\Exceptions\MissingTerritoryException;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -49,16 +51,12 @@ class ResendInvoice implements ShouldQueue
         }
 
         if (empty($territory)) {
-            $this->fail(new \RuntimeException(
-                'Cannot resend invoice: territory is not configured or missing. Ensure data column contains territory under data_key.'
-            ));
+            $this->fail(MissingTerritoryException::inInvoiceData());
             return;
         }
 
         if (empty($path)) {
-            $this->fail(new \RuntimeException(
-                sprintf('Cannot resend invoice id [%s]: path is empty.', $invoice->getKey())
-            ));
+            $this->fail(MissingInvoicePathException::forInvoice($invoice->getKey()));
             return;
         }
 
