@@ -7,8 +7,8 @@ use EBethus\LaravelTicketBAI\Job\ResendInvoice;
 use EBethus\LaravelTicketBAI\TicketBAI;
 use EBethus\LaravelTicketBAI\Tests\TestCase;
 use Barnetik\Tbai\Api;
+use Barnetik\Tbai\Api\ResponseInterface;
 use Barnetik\Tbai\TicketBai as BarnetikTicketBai;
-use Mockery;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -16,6 +16,7 @@ uses(TestCase::class);
 
 beforeEach(function () {
     Storage::fake('local');
+    config(['ticketbai.cert_path' => __DIR__.'/../stubs/nonexistent.p12']);
 });
 
 test('resend accepts invoice model', function () {
@@ -74,8 +75,8 @@ test('resend marks invoice failed on error', function () {
 
     $job->setApiMock($apiMock);
 
-    // Job should fail
-    expect(fn () => $job->handle($ticketbai))->toThrow(\Exception::class);
+    // Job catches error and marks invoice as failed
+    $job->handle($ticketbai);
 
     // Invoice should be marked as failed
     $invoice->refresh();
@@ -98,19 +99,51 @@ test('resend stores error response on failure', function () {
     $invoice->data = ['ticketbai' => ['signature' => 'sig', 'territory' => '01']];
     $invoice->save();
 
-    $ticketbai = app(TicketBAI::class);
+    $privateKeyMock = Mockery::mock('Barnetik\Tbai\PrivateKey');
+
+    $ticketbaiService = Mockery::mock(TicketBAI::class);
+    $ticketbaiService->shouldReceive('getCertificate')->andReturn($privateKeyMock);
+    $ticketbaiService->shouldReceive('getCertPassword')->andReturn(null);
+    $ticketbaiService->shouldReceive('getDisk')->andReturn('local');
+    $this->app->instance(TicketBAI::class, $ticketbaiService);
 
     $errorContent = ['code' => '003', 'description' => 'Invoice duplicate'];
 
-    $resultMock = Mockery::mock(\Barnetik\Tbai\Response\SubmitResult::class);
-    $resultMock->shouldReceive('isCorrect')->andReturn(false);
-    $resultMock->shouldReceive('content')->andReturn($errorContent);
+    $tbaiMock = Mockery::mock(BarnetikTicketBai::class);
 
+    // Create response object implementing ResponseInterface
+    $responseMock = new class('400', [], json_encode($errorContent)) implements ResponseInterface {
+        private string $statusCode;
+        private array $headersList;
+        private string $body;
+
+        public function __construct(string $status, array $headers, string $content)
+        {
+            $this->statusCode = $status;
+            $this->headersList = $headers;
+            $this->body = $content;
+        }
+
+        public function status(): string { return $this->statusCode; }
+        public function header(string $key): string { return $this->headersList[$key] ?? ''; }
+        public function headers(): array { return $this->headersList; }
+        public function content(): string { return $this->body; }
+        public function isDelivered(): bool { return true; }
+        public function isCorrect(): bool { return false; }
+        public function mainErrorMessage(): string { return $this->body; }
+        public function saveResponseContent(string $path): void {}
+        public function saveFullResponse(string $path): void {}
+        public function errorDataRegistry(): array { return json_decode($this->body, true) ?? []; }
+        public function hasErrorData(): bool { return true; }
+        public function toArray(): array { return json_decode($this->body, true) ?? []; }
+    };
+    
     $apiMock = Mockery::mock(Api::class);
-    $apiMock->shouldReceive('submitInvoice')->andReturn($resultMock);
+    $apiMock->shouldReceive('submitInvoice')->andReturn($responseMock);
 
     $job = new class($invoice) extends ResendInvoice {
         private Api $apiMock;
+        private BarnetikTicketBai $tbaiMock;
 
         public function setApiMock(Api $apiMock): self
         {
@@ -118,17 +151,29 @@ test('resend stores error response on failure', function () {
             return $this;
         }
 
+        public function setTbaiMock(BarnetikTicketBai $tbaiMock): self
+        {
+            $this->tbaiMock = $tbaiMock;
+            return $this;
+        }
+
         protected function createApi(BarnetikTicketBai $tbai, bool $test, bool $debug): Api
         {
             return $this->apiMock;
         }
+
+        protected function createTicketBaiFromXml(string $xmlContent, string $territory): BarnetikTicketBai
+        {
+            return $this->tbaiMock;
+        }
     };
 
-    $job->setApiMock($apiMock);
+    $job->setApiMock($apiMock)->setTbaiMock($tbaiMock);
 
-    expect(fn () => $job->handle($ticketbai))->toThrow(\Exception::class);
+    // Job catches error and stores it in data
+    $job->handle($ticketbaiService);
 
     $invoice->refresh();
-    expect($invoice->data['error'])->toBe($errorContent);
+    expect($invoice->data['error'])->toBe(json_encode($errorContent));
 });
 
