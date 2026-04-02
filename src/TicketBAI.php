@@ -262,13 +262,10 @@ class TicketBAI
         $privateKey = $this->getCertificate();
         $certPassword = $this->certPassword ?? '';
         
-        // Ensure ticketbai directory exists
-        $ticketbaiDir = storage_path('invoices/ticketbai');
-        if (!is_dir($ticketbaiDir)) {
-            mkdir($ticketbaiDir, 0755, true);
-        }
+        // Create file in system temp directory (will be moved to configured disk in save())
+        $tempDir = sys_get_temp_dir();
+        $this->signedFilename = $tempDir . DIRECTORY_SEPARATOR . 'ticketbai_' . $this->invoiceNumber . '.xml';
         
-        $this->signedFilename = storage_path('invoices/ticketbai/'.$this->invoiceNumber.'.xml');
         $ticketbai->sign($privateKey, $certPassword, $this->signedFilename);
         $qr = new \Barnetik\Tbai\Qr($ticketbai, true);
         $qrURL = $qr->qrUrl();
@@ -289,7 +286,12 @@ class TicketBAI
         $dataColumn = Invoice::getColumnName('data') ?? 'data';
         $dataKey = Invoice::getTicketBaiDataKey();
 
-        $pathValue = $disk->putFile('ticketbai', new \Illuminate\Http\File($this->signedFilename));
+        // Save file to configured disk (respects S3, local, or any other disk)
+        if ($this->signedFilename !== null && is_readable($this->signedFilename)) {
+            $pathValue = $disk->putFile('ticketbai', new \Illuminate\Http\File($this->signedFilename));
+        } else {
+            throw InvalidTicketBAIDataException::missingSignedFile();
+        }
 
         $attributes = [
             $pathColumn => $pathValue,

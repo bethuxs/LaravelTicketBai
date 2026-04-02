@@ -28,4 +28,9 @@ final class InvalidTicketBAIDataException extends RuntimeException
     {
         return new self('TicketBAI VAT percentage must be set before submission', code: 12);
     }
+
+    public static function missingSignedFile(): self
+    {
+        return new self('Signed XML file could not be created or is not readable', code: 13);
+    }
 }
