@@ -228,3 +228,223 @@ test('api error does not mark invoice as sent', function () {
     expect($invoice->sent)->toBeNull();
     expect($invoice->status)->toBe('failed');
 });
+
+test('duplicate invoice error (005) is treated as success', function () {
+    Log::spy();
+
+    $path = 'ticketbai/signed.xml';
+    $xmlContent = '<?xml version="1.0"?><T:TicketBai xmlns:T="urn:ticketbai:emision"/>';
+    Storage::disk('local')->put($path, $xmlContent);
+
+    $invoice = new Invoice();
+    $invoice->path = $path;
+    $invoice->issuer = 1;
+    $invoice->provider_reference = 'INV-DUPLICATE-005';
+    $invoice->data = ['ticketbai' => ['territory' => '01']];
+    $invoice->status = null;
+    $invoice->sent = null;
+    $invoice->save();
+
+    $privateKeyMock = Mockery::mock('Barnetik\Tbai\PrivateKey');
+    
+    $ticketbaiService = Mockery::mock(TicketBAI::class);
+    $ticketbaiService->shouldReceive('getCertificate')->andReturn($privateKeyMock);
+    $ticketbaiService->shouldReceive('getCertPassword')->andReturn(null);
+    $ticketbaiService->shouldReceive('getDisk')->andReturn('local');
+    $this->app->instance(TicketBAI::class, $ticketbaiService);
+
+    $tbaiMock = Mockery::mock(BarnetikTicketBai::class);
+
+    // Create response mock with duplicate error code 005
+    $responseMock = new class('200', [], '{}') implements ResponseInterface {
+        private string $statusCode;
+        private array $headersList;
+        private string $body;
+
+        public function __construct(string $status, array $headers, string $content)
+        {
+            $this->statusCode = $status;
+            $this->headersList = $headers;
+            $this->body = $content;
+        }
+
+        public function status(): string { return $this->statusCode; }
+        public function header(string $key): string { return $this->headersList[$key] ?? ''; }
+        public function headers(): array { return $this->headersList; }
+        public function content(): string { return $this->body; }
+        public function isDelivered(): bool { return true; }
+        public function isCorrect(): bool { return false; }  // Error response
+        public function mainErrorMessage(): string { return 'Fichero ya recibido'; }
+        public function saveResponseContent(string $path): void {}
+        public function saveFullResponse(string $path): void {}
+        
+        public function errorDataRegistry(): array {
+            return [
+                [
+                    'errorCode' => '005',
+                    'errorMessage' => [
+                        'eu' => 'Fitxategia jada jasotzea izan da',
+                        'es' => 'El fichero ya se ha recibido anteriormente',
+                    ],
+                ],
+            ];
+        }
+        
+        public function hasErrorData(): bool { return true; }
+        public function toArray(): array { return []; }
+    };
+    
+    $apiMock = Mockery::mock(Api::class);
+    $apiMock->shouldReceive('submitInvoice')->andReturn($responseMock);
+
+    $job = new class($invoice) extends InvoiceSend {
+        private Api $apiMock;
+        private BarnetikTicketBai $tbaiMock;
+
+        public function setApiMock(Api $apiMock): self
+        {
+            $this->apiMock = $apiMock;
+            return $this;
+        }
+
+        public function setTbaiMock(BarnetikTicketBai $tbaiMock): self
+        {
+            $this->tbaiMock = $tbaiMock;
+            return $this;
+        }
+
+        protected function createApi(BarnetikTicketBai $tbai, bool $test, bool $debug): Api
+        {
+            return $this->apiMock;
+        }
+
+        protected function createTicketBaiFromXml(string $xmlContent, string $territory): BarnetikTicketBai
+        {
+            return $this->tbaiMock;
+        }
+    };
+
+    $job->setApiMock($apiMock)->setTbaiMock($tbaiMock);
+
+    // Job should handle duplicate as success and NOT fail
+    $job->handle($ticketbaiService);
+
+    $invoice->refresh();
+    expect($invoice->status)->toBe('sent');
+    expect($invoice->sent)->not()->toBeNull();
+    expect($invoice->data)->toBeArray();
+    expect($invoice->data['duplicate'])->toBeTrue();
+    expect($invoice->data['status'])->toBe('sent');
+
+    Log::shouldHaveReceived('info')->atLeast()->once();
+});
+
+test('duplicate invoice error (B4_2000003 Bizkaia) is treated as success', function () {
+    Log::spy();
+
+    $path = 'ticketbai/signed.xml';
+    $xmlContent = '<?xml version="1.0"?><T:TicketBai xmlns:T="urn:ticketbai:emision"/>';
+    Storage::disk('local')->put($path, $xmlContent);
+
+    $invoice = new Invoice();
+    $invoice->path = $path;
+    $invoice->issuer = 1;
+    $invoice->provider_reference = 'INV-DUPLICATE-B42000003';
+    $invoice->data = ['ticketbai' => ['territory' => '02']];  // Bizkaia
+    $invoice->status = null;
+    $invoice->sent = null;
+    $invoice->save();
+
+    $privateKeyMock = Mockery::mock('Barnetik\Tbai\PrivateKey');
+    
+    $ticketbaiService = Mockery::mock(TicketBAI::class);
+    $ticketbaiService->shouldReceive('getCertificate')->andReturn($privateKeyMock);
+    $ticketbaiService->shouldReceive('getCertPassword')->andReturn(null);
+    $ticketbaiService->shouldReceive('getDisk')->andReturn('local');
+    $this->app->instance(TicketBAI::class, $ticketbaiService);
+
+    $tbaiMock = Mockery::mock(BarnetikTicketBai::class);
+
+    // Create response mock with Bizkaia duplicate error code B4_2000003
+    $responseMock = new class('200', [], '{}') implements ResponseInterface {
+        private string $statusCode;
+        private array $headersList;
+        private string $body;
+
+        public function __construct(string $status, array $headers, string $content)
+        {
+            $this->statusCode = $status;
+            $this->headersList = $headers;
+            $this->body = $content;
+        }
+
+        public function status(): string { return $this->statusCode; }
+        public function header(string $key): string { return $this->headersList[$key] ?? ''; }
+        public function headers(): array { return $this->headersList; }
+        public function content(): string { return $this->body; }
+        public function isDelivered(): bool { return true; }
+        public function isCorrect(): bool { return false; }  // Error response
+        public function mainErrorMessage(): string { return 'Registro duplicado'; }
+        public function saveResponseContent(string $path): void {}
+        public function saveFullResponse(string $path): void {}
+        
+        public function errorDataRegistry(): array {
+            return [
+                [
+                    'errorCode' => 'B4_2000003',
+                    'errorMessage' => [
+                        'eu' => 'Erregistro bikoitza',
+                        'es' => 'Registro duplicado',
+                    ],
+                ],
+            ];
+        }
+        
+        public function hasErrorData(): bool { return true; }
+        public function toArray(): array { return []; }
+    };
+    
+    $apiMock = Mockery::mock(Api::class);
+    $apiMock->shouldReceive('submitInvoice')->andReturn($responseMock);
+
+    $job = new class($invoice) extends InvoiceSend {
+        private Api $apiMock;
+        private BarnetikTicketBai $tbaiMock;
+
+        public function setApiMock(Api $apiMock): self
+        {
+            $this->apiMock = $apiMock;
+            return $this;
+        }
+
+        public function setTbaiMock(BarnetikTicketBai $tbaiMock): self
+        {
+            $this->tbaiMock = $tbaiMock;
+            return $this;
+        }
+
+        protected function createApi(BarnetikTicketBai $tbai, bool $test, bool $debug): Api
+        {
+            return $this->apiMock;
+        }
+
+        protected function createTicketBaiFromXml(string $xmlContent, string $territory): BarnetikTicketBai
+        {
+            return $this->tbaiMock;
+        }
+    };
+
+    $job->setApiMock($apiMock)->setTbaiMock($tbaiMock);
+
+    // Job should handle duplicate as success and NOT fail
+    $job->handle($ticketbaiService);
+
+    $invoice->refresh();
+    expect($invoice->status)->toBe('sent');
+    expect($invoice->sent)->not()->toBeNull();
+    expect($invoice->data)->toBeArray();
+    expect($invoice->data['duplicate'])->toBeTrue();
+    expect($invoice->data['status'])->toBe('sent');
+
+    Log::shouldHaveReceived('info')->atLeast()->once();
+});

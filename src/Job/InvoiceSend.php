@@ -157,36 +157,71 @@ class InvoiceSend implements ShouldQueue
                 $invoice->save();
             }
         } else {
-            // ERROR: API rejected the invoice
-            // Mark as failed, store error details, and fail job for potential retry
-            $info = $result->content();
-            Log::error('TicketBAI API returned error response', ['response' => $info]);
+            // ERROR: API returned an error response
+            // But check if it's a duplicate invoice (005 / B4_2000003) - these should be treated as success
             
-            $dataColumn = Invoice::getColumnName('data');
-            $statusColumn = Invoice::getColumnName('status');
-            $payload = Invoice::getTicketBaiPayload($invoice);
-            $payload['error'] = $info;
-            
-            // Save error to data column if it exists
-            if ($dataColumn !== null) {
-                $payload['status'] = 'failed';
-                $invoice->{$dataColumn} = $payload;
+            if ($this->isDuplicateInvoiceError($result)) {
+                // DUPLICATE HANDLING: Treat as success since TicketBAI already accepted this XML
+                Log::info('TicketBAI invoice is duplicate (already accepted)', [
+                    'invoice_id' => $invoice->getKey(),
+                    'response' => $result->content(),
+                ]);
+                
+                $sentColumn = Invoice::getColumnName('sent');
+                $statusColumn = Invoice::getColumnName('status');
+                $dataColumn = Invoice::getColumnName('data');
+                
+                if ($sentColumn !== null) {
+                    $invoice->{$sentColumn} = date('Y-m-d H:i:s');
+                }
+                if ($statusColumn !== null) {
+                    $invoice->{$statusColumn} = 'sent';
+                }
+                
+                // Store in data JSON with duplicate indicator
+                if ($dataColumn !== null) {
+                    $payload = Invoice::getTicketBaiPayload($invoice);
+                    $payload['status'] = 'sent';
+                    $payload['duplicate'] = true;
+                    $payload['error'] = $result->content();
+                    $invoice->{$dataColumn} = $payload;
+                }
+                
+                if ($sentColumn !== null || $statusColumn !== null || $dataColumn !== null) {
+                    $invoice->save();
+                }
+            } else {
+                // REAL ERROR: API rejected the invoice for actual validation/business reasons
+                // Mark as failed, store error details, and fail job for potential retry
+                $info = $result->content();
+                Log::error('TicketBAI API returned error response', ['response' => $info]);
+                
+                $dataColumn = Invoice::getColumnName('data');
+                $statusColumn = Invoice::getColumnName('status');
+                $payload = Invoice::getTicketBaiPayload($invoice);
+                $payload['error'] = $info;
+                
+                // Save error to data column if it exists
+                if ($dataColumn !== null) {
+                    $payload['status'] = 'failed';
+                    $invoice->{$dataColumn} = $payload;
+                }
+                // Mark as failed if status column exists
+                if ($statusColumn !== null) {
+                    $invoice->{$statusColumn} = 'failed';
+                }
+                
+                if ($dataColumn !== null || $statusColumn !== null) {
+                    $invoice->save();
+                }
+                
+                $errorMessage = sprintf(
+                    'TicketBAI invoice [%s] rejected: %s',
+                    $invoice->getKey(),
+                    is_array($info) ? json_encode($info) : $info
+                );
+                $this->fail(new \Exception($errorMessage));
             }
-            // Mark as failed if status column exists
-            if ($statusColumn !== null) {
-                $invoice->{$statusColumn} = 'failed';
-            }
-            
-            if ($dataColumn !== null || $statusColumn !== null) {
-                $invoice->save();
-            }
-            
-            $errorMessage = sprintf(
-                'TicketBAI invoice [%s] rejected: %s',
-                $invoice->getKey(),
-                is_array($info) ? json_encode($info) : $info
-            );
-            $this->fail(new \Exception($errorMessage));
         }
     }
 
@@ -204,6 +239,40 @@ class InvoiceSend implements ShouldQueue
     protected function createTicketBaiFromXml(string $xmlContent, string $territory): \Barnetik\Tbai\TicketBai
     {
         return \Barnetik\Tbai\TicketBai::createFromXml($xmlContent, $territory, false);
+    }
+
+    /**
+     * Check if API error response indicates a duplicate invoice (already accepted).
+     * 
+     * Duplicate codes:
+     * - "005" (ALTA format): "El fichero ya se ha recibido anteriormente"
+     * - "B4_2000003" (Bizkaia format): "Registro duplicado"
+     * 
+     * These errors should be treated as success because the invoice was already
+     * accepted by TicketBAI in a previous submission attempt.
+     */
+    protected function isDuplicateInvoiceError(\Barnetik\Tbai\Api\ResponseInterface $result): bool
+    {
+        $errorData = $result->errorDataRegistry();
+        
+        // If no error data, it's not a duplicate
+        if (empty($errorData)) {
+            return false;
+        }
+        
+        // Check if ALL errors are duplicate codes
+        foreach ($errorData as $error) {
+            $code = (string)($error['errorCode'] ?? '');
+            
+            // Check for duplicate error codes
+            if ($code !== '005' && $code !== 'B4_2000003') {
+                // Found a non-duplicate error, so this is not purely a duplicate
+                return false;
+            }
+        }
+        
+        // All errors (if any) are duplicate codes
+        return !empty($errorData);
     }
 }
 
