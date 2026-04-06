@@ -58,6 +58,13 @@ class TicketBAI
 
     protected mixed $data = null;
 
+    /**
+     * If true, prices passed to add() include VAT (TTC = Toutes Taxes Comprises).
+     * If false (default), prices are net without VAT (HT = Hors Taxe).
+     * This affects how unitAmount (base) is calculated from unitPrice.
+     */
+    protected bool $priceIncludesVat = false;
+
     public function __construct(array $config = [])
     {
         if ($config !== []) {
@@ -183,15 +190,53 @@ class TicketBAI
         $this->vatPerc = $vatPerc;
     }
 
+    /**
+     * Set price format for line items.
+     * 
+     * @param bool $includesVat
+     *   - true: prices passed to add() are TTC (gross, with VAT included)
+     *   - false (default): prices are HT (net, without VAT)
+     */
+    public function setPriceFormat(bool $includesVat): void
+    {
+        $this->priceIncludesVat = $includesVat;
+    }
+
+    /**
+     * Add invoice line item.
+     * 
+     * @param string $desc Item description
+     * @param float $unitPrice Price per unit (format depends on setPriceFormat())
+     *   - if priceIncludesVat=false (default): HT (net, without VAT)
+     *   - if priceIncludesVat=true: TTC (gross, with VAT)
+     * @param float $q Quantity
+     * @param float|null $discount Optional discount amount
+     */
     public function add(string $desc, float $unitPrice, float $q, ?float $discount = null): void
     {
         if ($this->vatPerc === null) {
             throw InvalidTicketBAIDataException::vatPercentageNotSet();
         }
-        $unitAmount = new Amount($this->formatAmount($unitPrice * (100 - $this->vatPerc) / 100), 12, 8);
+
+        // Calculate base amount (HT/net) and total amount (TTC/gross)
+        if ($this->priceIncludesVat) {
+            // Input is TTC (with VAT): unitPrice = unit_ht * (1 + vat/100)
+            // So: unit_ht = unitPrice / (1 + vat/100)
+            $vatFactor = 1 + ($this->vatPerc / 100);
+            $unitAmountValue = $unitPrice / $vatFactor;
+            $totalAmount = $unitPrice * $q - ($discount ?? 0);
+        } else {
+            // Input is HT (without VAT): unitPrice is already net
+            // Calculate TTC: unit_ttc = unit_ht * (1 + vat/100)
+            $unitAmountValue = $unitPrice;
+            $vatFactor = 1 + ($this->vatPerc / 100);
+            $totalAmount = ($unitPrice * $vatFactor * $q) - ($discount ?? 0);
+        }
+
+        $unitAmount = new Amount($this->formatAmount($unitAmountValue), 12, 8);
         $quantity = new Amount($this->formatAmount($q));
         $disc = $discount !== null ? new Amount($this->formatAmount($discount)) : null;
-        $total = new Amount($this->formatAmount($unitPrice * $q - ($discount ?? 0)));
+        $total = new Amount($this->formatAmount($totalAmount));
         $this->items[] = new \Barnetik\Tbai\Invoice\Data\Detail($desc, $unitAmount, $quantity, $total, $disc);
     }
 
@@ -210,12 +255,25 @@ class TicketBAI
         $fingerprint = $this->getFingerprint();
 
         $totalInvoice = $this->totalInvoice;
+        
+        // Calculate VAT breakdown from line aggregation (not from lump sum)
+        // This ensures breakdown matches line detail and avoids ALTA 5016 errors
+        $totalBaseAmount = 0.0;
+        foreach ($this->items as $item) {
+            $itemArray = $item->toArray();
+            // unitPrice is the base (HT/net) price per unit in the Detail object
+            $totalBaseAmount += (float) $itemArray['unitPrice'] * (float) $itemArray['quantity'];
+        }
+        $totalBaseAmount = (float) $this->formatAmount($totalBaseAmount);
+        
+        // VAT = Total with VAT (TTC) - Total without VAT (HT)
+        $totalVatAmount = (float) $this->formatAmount($totalInvoice - $totalBaseAmount);
+        
         $vat = new Amount($this->formatAmount($this->vatPerc));
-        $totalWithOutVat = $totalInvoice * (100 - $this->vatPerc) / 100;
         $vatDetail = new \Barnetik\Tbai\Invoice\Breakdown\VatDetail(
-            new Amount($this->formatAmount($totalWithOutVat)),
+            new Amount($this->formatAmount($totalBaseAmount)),
             $vat,
-            new Amount($this->formatAmount($totalInvoice - $totalWithOutVat))
+            new Amount($this->formatAmount($totalVatAmount))
         );
         $notExemptBreakdown = new NationalSubjectNotExemptBreakdownItem(
             NationalSubjectNotExemptBreakdownItem::NOT_EXEMPT_TYPE_S1,

@@ -283,6 +283,36 @@ class InvoiceController extends Controller
 }
 ```
 
+### Price Format (HT vs TTC)
+
+By default, prices passed to `add()` are treated as **HT (Hors Taxe / Net)** — without VAT included. This is the recommended format for most use cases.
+
+However, you can configure the package to accept **TTC (Toutes Taxes Comprises / Gross)** prices that include VAT:
+
+#### Default: HT Format (without VAT)
+
+```php
+$ticketbai->setVat(21); // 21% VAT
+$ticketbai->setPriceFormat(false); // HT format (default, can be omitted)
+
+// Price 100 = €100.00 HT (net)
+// TicketBAI receives: base=100, gross=121
+$ticketbai->add('Product', 100.00, 2);
+```
+
+#### TTC Format (with VAT included)
+
+```php
+$ticketbai->setVat(21);
+$ticketbai->setPriceFormat(true); // TTC format (with VAT)
+
+// Price 121 = €121.00 TTC (gross, with VAT)
+// TicketBAI receives: base=100, gross=121
+$ticketbai->add('Product', 121.00, 2);
+```
+
+**Important**: The VAT breakdown is calculated by aggregating individual line items, NOT from the total amount, ensuring consistency with TicketBAI validation rules and avoiding ALTA 5016 errors.
+
 ### Adding Extra Data to Invoices
 
 You can attach additional JSON data to invoices. **Important:** Call `data()` BEFORE calling `invoice()`:
