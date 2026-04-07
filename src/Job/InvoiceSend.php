@@ -158,7 +158,7 @@ class InvoiceSend implements ShouldQueue
             }
         } else {
             // ERROR: API returned an error response
-            // But check if it's a duplicate invoice (005 / B4_2000003) - these should be treated as success
+            // But check if it's a duplicate invoice (005 / B4_2000003 / 5040) - these should be treated as success
             
             if ($this->isDuplicateInvoiceError($result)) {
                 // DUPLICATE HANDLING: Treat as success since TicketBAI already accepted this XML
@@ -247,6 +247,7 @@ class InvoiceSend implements ShouldQueue
      * Duplicate codes:
      * - "005" (ALTA format): "El fichero ya se ha recibido anteriormente"
      * - "B4_2000003" (Bizkaia format): "Registro duplicado"
+     * - "5040": "Existe una factura con la misma serie, número de factura y año de expedición"
      * 
      * These errors should be treated as success because the invoice was already
      * accepted by TicketBAI in a previous submission attempt.
@@ -260,12 +261,15 @@ class InvoiceSend implements ShouldQueue
             return false;
         }
         
+        // Known duplicate error codes (invoice already accepted)
+        $duplicateCodes = ['005', 'B4_2000003', '5040'];
+        
         // Check if ALL errors are duplicate codes
         foreach ($errorData as $error) {
             $code = (string)($error['errorCode'] ?? '');
             
             // Check for duplicate error codes
-            if ($code !== '005' && $code !== 'B4_2000003') {
+            if (!in_array($code, $duplicateCodes, true)) {
                 // Found a non-duplicate error, so this is not purely a duplicate
                 return false;
             }
