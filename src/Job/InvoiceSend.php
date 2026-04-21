@@ -32,18 +32,23 @@ use Illuminate\Support\Facades\Storage;
  *   - Clears temporary XML file
  *   - Marks as successful
  *
- * - FAILURE (isCorrect = false):
+ * - FAILURE - Duplicate Invoice (isCorrect = false, duplicate error codes):
+ *   - Treats as success (invoice was already accepted in a previous submission)
+ *   - Sets status = 'sent'
+ *   - Stores duplicate indicator in data
+ *
+ * - FAILURE - Validation/Business Error (isCorrect = false, non-duplicate):
  *   - Sets status = 'failed'
  *   - Stores error response in invoice.data['error']
  *   - Logs error with full API response
- *   - Fails the job so it can be retried
+ *   - Completes job successfully (no retry - validation errors won't be fixed by retrying)
  *
  * - EXCEPTION:
  *   - Catches connection/certificate errors
  *   - Logs detailed error with XML content
- *   - Fails the job appropriately
+ *   - Fails the job for retry (transient errors may resolve)
  *
- * The invoice is never marked as 'sent' unless the API explicitly returns isCorrect = true.
+ * The invoice is never marked as 'sent' unless the API explicitly returns isCorrect = true or duplicate.
  */
 class InvoiceSend implements ShouldQueue
 {
@@ -215,12 +220,10 @@ class InvoiceSend implements ShouldQueue
                     $invoice->save();
                 }
                 
-                $errorMessage = sprintf(
-                    'TicketBAI invoice [%s] rejected: %s',
-                    $invoice->getKey(),
-                    is_array($info) ? json_encode($info) : $info
-                );
-                $this->fail(new \Exception($errorMessage));
+                // Validation/business rejection: do not fail the queue job.
+                // Retries will not fix invalid XML, incorrect codes, or business rule violations.
+                // The error has been persisted and logged above.
+                return;
             }
         }
     }

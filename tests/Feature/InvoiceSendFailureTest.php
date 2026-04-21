@@ -545,7 +545,6 @@ test('duplicate invoice error (5040) is treated as success', function () {
     };
 
     $job->setApiMock($apiMock)->setTbaiMock($tbaiMock);
-
     // Job should handle duplicate as success and NOT fail
     $job->handle($ticketbaiService);
 
@@ -557,4 +556,122 @@ test('duplicate invoice error (5040) is treated as success', function () {
     expect($invoice->data['status'])->toBe('sent');
 
     Log::shouldHaveReceived('info')->atLeast()->once();
+});
+
+test('validation error completes job without retry (does not fail queue job)', function () {
+    Log::spy();
+
+    $path = 'ticketbai/signed.xml';
+    $xmlContent = '<?xml version="1.0"?><T:TicketBai xmlns:T="urn:ticketbai:emision"/>';
+    Storage::disk('local')->put($path, $xmlContent);
+
+    $invoice = new Invoice();
+    $invoice->path = $path;
+    $invoice->issuer = 1;
+    $invoice->provider_reference = 'INV-VALIDATION-ERROR';
+    $invoice->data = ['ticketbai' => ['territory' => '01']];
+    $invoice->status = null;
+    $invoice->sent = null;
+    $invoice->save();
+
+    $privateKeyMock = Mockery::mock('Barnetik\Tbai\PrivateKey');
+    
+    $ticketbaiService = Mockery::mock(TicketBAI::class);
+    $ticketbaiService->shouldReceive('getCertificate')->andReturn($privateKeyMock);
+    $ticketbaiService->shouldReceive('getCertPassword')->andReturn(null);
+    $ticketbaiService->shouldReceive('getDisk')->andReturn('local');
+    $this->app->instance(TicketBAI::class, $ticketbaiService);
+
+    // Non-duplicate validation error
+    $errorContent = [
+        'code' => '002',
+        'description' => 'Fichero no cumple el esquema XSD',
+    ];
+
+    $tbaiMock = Mockery::mock(BarnetikTicketBai::class);
+
+    // Create response object implementing ResponseInterface
+    $responseMock = new class('400', [], json_encode($errorContent)) implements ResponseInterface {
+        private string $statusCode;
+        private array $headersList;
+        private string $body;
+
+        public function __construct(string $status, array $headers, string $content)
+        {
+            $this->statusCode = $status;
+            $this->headersList = $headers;
+            $this->body = $content;
+        }
+
+        public function status(): string { return $this->statusCode; }
+        public function header(string $key): string { return $this->headersList[$key] ?? ''; }
+        public function headers(): array { return $this->headersList; }
+        public function content(): string { return $this->body; }
+        public function isDelivered(): bool { return true; }
+        public function isCorrect(): bool { return false; }
+        public function mainErrorMessage(): string { return $this->body; }
+        public function saveResponseContent(string $path): void {}
+        public function saveFullResponse(string $path): void {}
+        public function errorDataRegistry(): array { return json_decode($this->body, true) ?? []; }
+        public function hasErrorData(): bool { return true; }
+        public function toArray(): array { return json_decode($this->body, true) ?? []; }
+    };
+    
+    $apiMock = Mockery::mock(Api::class);
+    $apiMock->shouldReceive('submitInvoice')->andReturn($responseMock);
+
+    $job = new class($invoice) extends InvoiceSend {
+        private Api $apiMock;
+        private BarnetikTicketBai $tbaiMock;
+        public bool $failedCalled = false;
+
+        public function setApiMock(Api $apiMock): self
+        {
+            $this->apiMock = $apiMock;
+            return $this;
+        }
+
+        public function setTbaiMock(BarnetikTicketBai $tbaiMock): self
+        {
+            $this->tbaiMock = $tbaiMock;
+            return $this;
+        }
+
+        protected function createApi(BarnetikTicketBai $tbai, bool $test, bool $debug): Api
+        {
+            return $this->apiMock;
+        }
+
+        protected function createTicketBaiFromXml(string $xmlContent, string $territory): BarnetikTicketBai
+        {
+            return $this->tbaiMock;
+        }
+
+        // Override fail to track if it was called
+        public function fail($exception = null): void
+        {
+            $this->failedCalled = true;
+            parent::fail($exception);
+        }
+    };
+
+    $job->setApiMock($apiMock)->setTbaiMock($tbaiMock);
+
+    // Job should handle validation error WITHOUT failing the queue job
+    $job->handle($ticketbaiService);
+
+    // Verify invoice was marked as failed with error persisted
+    $invoice->refresh();
+    expect($invoice->status)->toBe('failed');
+    expect($invoice->sent)->toBeNull();
+    expect($invoice->data)->toBeArray();
+    expect($invoice->data)->toHaveKey('error');
+    expect($invoice->data['error'])->toBe(json_encode($errorContent));
+    expect($invoice->data['status'])->toBe('failed');
+
+    // Verify error was logged
+    Log::shouldHaveReceived('error')->atLeast()->once();
+
+    // CRITICAL: Verify that $this->fail() was NOT called (job completes successfully)
+    expect($job->failedCalled)->toBeFalse();
 });
