@@ -71,7 +71,7 @@ return [
             'path'       => env('TICKETBAI_COLUMN_PATH', 'path'),
             'data'       => env('TICKETBAI_COLUMN_DATA', 'data'),
             'sent'       => env('TICKETBAI_COLUMN_SENT', null),
-            'status'     => env('TICKETBAI_COLUMN_STATUS', null),
+            'status'     => env('TICKETBAI_COLUMN_STATUS', 'status'),
             'created_at' => env('TICKETBAI_COLUMN_CREATED_AT', 'created_at'),
             'updated_at' => env('TICKETBAI_COLUMN_UPDATED_AT', 'updated_at'),
         ],

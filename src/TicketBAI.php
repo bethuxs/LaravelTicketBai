@@ -108,9 +108,22 @@ class TicketBAI
 
         $issuerColumn = Invoice::getColumnName('issuer');
         $createdAtColumn = Invoice::getColumnName('created_at');
-        $prev = Invoice::where($issuerColumn, $this->idIssuer)
-            ->orderBy($createdAtColumn, 'desc')
-            ->first();
+        $signatureColumn = Invoice::getColumnName('signature');
+
+        // Filter to only TicketBAI invoices (those with a stored signature).
+        // Without this filter, a Verifactu or other-provider invoice would be picked as "previous",
+        // its signature would be null, chaining would be skipped, and the authority returns error 010.
+        $query = Invoice::where($issuerColumn, $this->idIssuer);
+
+        if ($signatureColumn !== null) {
+            $query->whereNotNull($signatureColumn);
+        } else {
+            $dataColumn = Invoice::getColumnName('data') ?? 'data';
+            $dataKey = config('ticketbai.data_key', 'ticketbai');
+            $query->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(`{$dataColumn}`, '$.{$dataKey}.signature')) IS NOT NULL");
+        }
+
+        $prev = $query->orderBy($createdAtColumn, 'desc')->first();
 
         $prevInvoice = null;
         if ($prev !== null) {

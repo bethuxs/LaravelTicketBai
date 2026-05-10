@@ -66,6 +66,31 @@ class InvoiceSend implements ShouldQueue
     public function handle(TicketBAI $ticketbaiService): void
     {
         $invoice = $this->invoice;
+
+        // Guarantee submission order: do not send this invoice if there are earlier invoices
+        // from the same seller still pending. This prevents error 010 (encadenamiento) caused
+        // by queue workers submitting invoices out of creation order.
+        $issuerColumn = Invoice::getColumnName('issuer');
+        $statusColumn = Invoice::getColumnName('status');
+        if ($issuerColumn !== null && $invoice->{$issuerColumn} !== null) {
+            $hasPendingPrevious = false;
+            if ($statusColumn !== null) {
+                $hasPendingPrevious = Invoice::where($issuerColumn, $invoice->{$issuerColumn})
+                    ->where('id', '<', $invoice->getKey())
+                    ->where($statusColumn, 'pending')
+                    ->exists();
+            }
+
+            if ($hasPendingPrevious) {
+                Log::info('TicketBAI invoice deferred: earlier invoice for same seller still pending', [
+                    'invoice_id' => $invoice->getKey(),
+                    'issuer' => $invoice->{$issuerColumn},
+                ]);
+                $this->release(30);
+                return;
+            }
+        }
+
         $payload = Invoice::getTicketBaiPayload($invoice);
         $path = $payload['path'] ?? null;
         
@@ -165,8 +190,20 @@ class InvoiceSend implements ShouldQueue
             // ERROR: API returned an error response
             // But check if it's a duplicate invoice (005 / B4_2000003 / 5040) - these should be treated as success
             
-            if ($this->isDuplicateInvoiceError($result)) {
-                // DUPLICATE HANDLING: Treat as success since TicketBAI already accepted this XML
+            try {
+                $isDuplicate = $this->isDuplicateInvoiceError($result);
+            } catch (\Throwable $e) {
+                Log::warning('TicketBAI: could not verify duplicate status, treating as real error', [
+                    'invoice_id' => $invoice->getKey(),
+                    'exception' => $e->getMessage(),
+                ]);
+                $isDuplicate = false;
+            }
+
+            if ($isDuplicate) {
+                // SOFT-ACCEPTANCE: API returned codes indicating the invoice was already accepted.
+                // Codes: 005 (fichero ya recibido), 010 (posible encadenamiento — factura aceptada con aviso),
+                // B4_2000003 (Bizkaia duplicado), 5040 (misma serie/número/año).
                 Log::info('TicketBAI invoice is duplicate (already accepted)', [
                     'invoice_id' => $invoice->getKey(),
                     'response' => $result->content(),
@@ -245,41 +282,40 @@ class InvoiceSend implements ShouldQueue
     }
 
     /**
-     * Check if API error response indicates a duplicate invoice (already accepted).
-     * 
-     * Duplicate codes:
-     * - "005" (ALTA format): "El fichero ya se ha recibido anteriormente"
-     * - "B4_2000003" (Bizkaia format): "Registro duplicado"
-     * - "5040": "Existe una factura con la misma serie, número de factura y año de expedición"
-     * 
-     * These errors should be treated as success because the invoice was already
-     * accepted by TicketBAI in a previous submission attempt.
+     * Check if API error response indicates that the invoice was already accepted (soft-accept).
+     *
+     * Soft-accept codes (treat as 'sent'):
+     * - "005"        (ALTA): "El fichero ya se ha recibido anteriormente"
+     * - "010"        (ALTA/Araba): "Posible error de encadenamiento" — Araba accepted the invoice
+     *                (Estado=00) but added a chain warning in ResultadosValidacion; isCorrect()
+     *                returns false for any ResultadosValidacion, so without this code the invoice
+     *                would be incorrectly marked as failed even though it IS in the authority's system.
+     * - "B4_2000003" (Bizkaia): "Registro duplicado"
+     * - "5040"       (ALTA): "Existe una factura con la misma serie, número de factura y año"
      */
     protected function isDuplicateInvoiceError(\Barnetik\Tbai\Api\ResponseInterface $result): bool
     {
-        $errorData = $result->errorDataRegistry();
-        
-        // If no error data, it's not a duplicate
-        if (empty($errorData)) {
+        try {
+            $errorData = $result->errorDataRegistry();
+        } catch (\Throwable $e) {
             return false;
         }
-        
-        // Known duplicate error codes (invoice already accepted)
-        $duplicateCodes = ['005', 'B4_2000003', '5040'];
-        
-        // Check if ALL errors are duplicate codes
+
+        if ($errorData === []) {
+            return false;
+        }
+
+        $duplicateCodes = ['005', '010', 'B4_2000003', '5040'];
+
         foreach ($errorData as $error) {
             $code = (string)($error['errorCode'] ?? '');
-            
-            // Check for duplicate error codes
+
             if (!in_array($code, $duplicateCodes, true)) {
-                // Found a non-duplicate error, so this is not purely a duplicate
                 return false;
             }
         }
-        
-        // All errors (if any) are duplicate codes
-        return !empty($errorData);
+
+        return true;
     }
 }
 
