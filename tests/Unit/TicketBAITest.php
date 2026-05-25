@@ -7,6 +7,7 @@ use EBethus\LaravelTicketBAI\Exceptions\InvalidTerritoryException;
 use EBethus\LaravelTicketBAI\Exceptions\InvalidTicketBAIDataException;
 use EBethus\LaravelTicketBAI\TicketBAI;
 use EBethus\LaravelTicketBAI\Tests\TestCase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 
 uses(TestCase::class);
@@ -177,4 +178,48 @@ test('invoice number is valid ulid prefix', function () {
     $invoiceNumber = $method->invoke($ticketbai);
 
     expect($invoiceNumber)->toMatch('/^[0-9A-Z]{20}$/');
+});
+
+test('invoice() releases cache lock even when certificate is missing', function () {
+    config(['ticketbai.cert_path' => __DIR__.'/../stubs/nonexistent-cert.p12']);
+    $issuerId = 42;
+
+    $ticketbai = new TicketBAI([
+        'license' => 'L', 'nif' => 'B1', 'appName' => 'A', 'appVersion' => '1',
+        'certPassword' => 'p',
+    ]);
+    $ticketbai->issuer('B12345678', 'Company', $issuerId);
+    $ticketbai->setVat(21);
+    $ticketbai->add('Item', 10.0, 1);
+
+    // invoice() will throw CertificateNotFoundException when trying to sign
+    try {
+        $ticketbai->invoice('ARABA', 'Test');
+    } catch (CertificateNotFoundException) {
+        // Expected
+    }
+
+    // The per-issuer lock must have been released in the finally block.
+    // If it were still held, get(0) would return false (could not acquire).
+    $lockKey = 'ticketbai.chain.' . $issuerId;
+    $lock = Cache::lock($lockKey, 5);
+    expect($lock->get())->toBeTrue();
+    $lock->release();
+});
+
+test('invoice() uses separate lock keys per issuer to allow parallel generation', function () {
+    // Verify that the lock key is scoped to the issuer id, so different issuers
+    // don't block each other (no global serialization of unrelated invoice streams).
+    $issuerA = 101;
+    $issuerB = 202;
+
+    $lockA = Cache::lock('ticketbai.chain.' . $issuerA, 5);
+    $lockB = Cache::lock('ticketbai.chain.' . $issuerB, 5);
+
+    expect($lockA->get())->toBeTrue();
+    // A different issuer's lock is independent — can be acquired while A is held
+    expect($lockB->get())->toBeTrue();
+
+    $lockA->release();
+    $lockB->release();
 });

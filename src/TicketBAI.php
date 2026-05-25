@@ -13,6 +13,7 @@ use Barnetik\Tbai\ValueObject\Amount;
 use EBethus\LaravelTicketBAI\Exceptions\CertificateNotFoundException;
 use EBethus\LaravelTicketBAI\Exceptions\InvalidTicketBAIDataException;
 use EBethus\LaravelTicketBAI\Exceptions\InvalidTerritoryException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -265,47 +266,60 @@ class TicketBAI
 
         $data = $this->getData($description);
         $header = $this->simplifyHeader();
-        $fingerprint = $this->getFingerprint();
 
-        $totalInvoice = $this->totalInvoice;
-        
-        // Calculate VAT breakdown from line aggregation (not from lump sum)
-        // This ensures breakdown matches line detail and avoids ALTA 5016 errors
-        $totalBaseAmount = 0.0;
-        foreach ($this->items as $item) {
-            $itemArray = $item->toArray();
-            // unitPrice is the base (HT/net) price per unit in the Detail object
-            $totalBaseAmount += (float) $itemArray['unitPrice'] * (float) $itemArray['quantity'];
+        // Acquire a per-issuer lock to prevent race conditions when multiple requests
+        // generate invoices concurrently for the same issuer. Without this, two concurrent
+        // calls to getFingerprint() would both read the same "previous" invoice before either
+        // has been saved, making both chain to the same predecessor and triggering error 010.
+        $lockKey = 'ticketbai.chain.' . ($this->idIssuer ?? 'global');
+        $lock = Cache::lock($lockKey, 30);
+        $lock->block(15);
+
+        try {
+            $fingerprint = $this->getFingerprint();
+
+            $totalInvoice = $this->totalInvoice;
+
+            // Calculate VAT breakdown from line aggregation (not from lump sum)
+            // This ensures breakdown matches line detail and avoids ALTA 5016 errors
+            $totalBaseAmount = 0.0;
+            foreach ($this->items as $item) {
+                $itemArray = $item->toArray();
+                // unitPrice is the base (HT/net) price per unit in the Detail object
+                $totalBaseAmount += (float) $itemArray['unitPrice'] * (float) $itemArray['quantity'];
+            }
+            $totalBaseAmount = (float) $this->formatAmount($totalBaseAmount);
+
+            // VAT = Total with VAT (TTC) - Total without VAT (HT)
+            $totalVatAmount = (float) $this->formatAmount($totalInvoice - $totalBaseAmount);
+
+            $vat = new Amount($this->formatAmount($this->vatPerc));
+            $vatDetail = new \Barnetik\Tbai\Invoice\Breakdown\VatDetail(
+                new Amount($this->formatAmount($totalBaseAmount)),
+                $vat,
+                new Amount($this->formatAmount($totalVatAmount))
+            );
+            $notExemptBreakdown = new NationalSubjectNotExemptBreakdownItem(
+                NationalSubjectNotExemptBreakdownItem::NOT_EXEMPT_TYPE_S1,
+                [$vatDetail]
+            );
+            $breakdown = new \Barnetik\Tbai\Invoice\Breakdown;
+            $breakdown->addNationalSubjectNotExemptBreakdownItem($notExemptBreakdown);
+            $invoice = new \Barnetik\Tbai\Invoice($header, $data, $breakdown);
+
+            $territoryCode = (string) array_search($territory, self::CODE_TO_TERRITORY, true);
+            $this->ticketbai = new \Barnetik\Tbai\TicketBai(
+                $this->subject,
+                $invoice,
+                $fingerprint,
+                $territoryCode,
+                false
+            );
+
+            return $this->sign();
+        } finally {
+            $lock->release();
         }
-        $totalBaseAmount = (float) $this->formatAmount($totalBaseAmount);
-        
-        // VAT = Total with VAT (TTC) - Total without VAT (HT)
-        $totalVatAmount = (float) $this->formatAmount($totalInvoice - $totalBaseAmount);
-        
-        $vat = new Amount($this->formatAmount($this->vatPerc));
-        $vatDetail = new \Barnetik\Tbai\Invoice\Breakdown\VatDetail(
-            new Amount($this->formatAmount($totalBaseAmount)),
-            $vat,
-            new Amount($this->formatAmount($totalVatAmount))
-        );
-        $notExemptBreakdown = new NationalSubjectNotExemptBreakdownItem(
-            NationalSubjectNotExemptBreakdownItem::NOT_EXEMPT_TYPE_S1,
-            [$vatDetail]
-        );
-        $breakdown = new \Barnetik\Tbai\Invoice\Breakdown;
-        $breakdown->addNationalSubjectNotExemptBreakdownItem($notExemptBreakdown);
-        $invoice = new \Barnetik\Tbai\Invoice($header, $data, $breakdown);
-
-        $territoryCode = (string) array_search($territory, self::CODE_TO_TERRITORY, true);
-        $this->ticketbai = new \Barnetik\Tbai\TicketBai(
-            $this->subject,
-            $invoice,
-            $fingerprint,
-            $territoryCode,
-            false
-        );
-
-        return $this->sign();
     }
 
     public function getCertificate(): \Barnetik\Tbai\PrivateKey
