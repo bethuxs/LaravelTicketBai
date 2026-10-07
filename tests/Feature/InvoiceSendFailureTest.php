@@ -37,6 +37,10 @@ test('certificate not found marks invoice as failed', function () {
     
     $invoice->refresh();
     expect($invoice->status)->toBe('failed');
+    expect($invoice->data)->toMatchArray([
+        'ticketbai' => ['territory' => '01'],
+        'status' => 'failed',
+    ]);
 });
 
 test('api exception is logged and job fails', function () {
@@ -177,6 +181,7 @@ test('api error response marks invoice as failed', function () {
     expect($invoice->data)->toBeArray();
     expect($invoice->data)->toHaveKey('error');
     expect($invoice->data['error'])->toBe(json_encode($errorContent));
+    expect($invoice->data['ticketbai']['territory'])->toBe('01');
 
     Log::shouldHaveReceived('error')->atLeast()->once();
 });
@@ -335,6 +340,7 @@ test('duplicate invoice error (005) is treated as success', function () {
     expect($invoice->data)->toBeArray();
     expect($invoice->data['duplicate'])->toBeTrue();
     expect($invoice->data['status'])->toBe('sent');
+    expect($invoice->data['ticketbai']['territory'])->toBe('01');
 
     Log::shouldHaveReceived('info')->atLeast()->once();
 });

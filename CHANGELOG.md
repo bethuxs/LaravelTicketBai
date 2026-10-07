@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **InvoiceSend retries**: Preserve namespaced TicketBAI signature and territory metadata when storing send results, and recover payloads flattened by earlier versions.
 - **InvoiceSend**: read XML from Storage disk instead of `file_get_contents($model->path)` (path is relative to disk).
 - **ULID truncation**: Invoice number now correctly truncated to 20 characters for TicketBAI XSD compliance (was being used at 26 chars).
 - **Test failures**: Fixed 6 failing tests after code quality improvements; updated job error handling and test mocking patterns.

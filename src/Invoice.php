@@ -104,7 +104,7 @@ class Invoice extends Model
         $pathFromColumn = $pathCol !== null ? ($model->{$pathCol} ?? null) : null;
 
         $data = $model->{$dataColumn} ?? null;
-        if (! is_array($data) || ! isset($data[$key]) || ! is_array($data[$key])) {
+        if (! is_array($data)) {
             return [
                 'signature' => null,
                 'path' => $pathFromColumn,
@@ -112,10 +112,53 @@ class Invoice extends Model
             ];
         }
 
+        $payload = isset($data[$key]) && is_array($data[$key])
+            ? $data[$key]
+            : [];
+
         return [
-            'signature' => $data[$key]['signature'] ?? null,
+            'signature' => $payload['signature'] ?? $data['signature'] ?? null,
             'path' => $pathFromColumn,
-            'territory' => $data[$key]['territory'] ?? null,
+            'territory' => $payload['territory'] ?? $data['territory'] ?? null,
         ];
+    }
+
+    /**
+     * Merge send metadata without replacing the namespaced TicketBAI payload.
+     *
+     * This also restores the namespaced payload for rows flattened by older
+     * InvoiceSend versions so that retries and resends remain possible.
+     *
+     * @param  array<string, mixed>  $metadata
+     */
+    public static function mergeTicketBaiMetadata(self $model, array $metadata): void
+    {
+        $dataColumn = self::getColumnName('data');
+        if ($dataColumn === null) {
+            return;
+        }
+
+        $data = $model->{$dataColumn} ?? [];
+        if (! is_array($data)) {
+            $data = [];
+        }
+
+        $key = self::getTicketBaiDataKey();
+        $ticketBaiData = isset($data[$key]) && is_array($data[$key])
+            ? $data[$key]
+            : [];
+        $payload = self::getTicketBaiPayload($model);
+
+        foreach (['signature', 'territory'] as $field) {
+            if (! array_key_exists($field, $ticketBaiData) && $payload[$field] !== null) {
+                $ticketBaiData[$field] = $payload[$field];
+            }
+        }
+
+        if ($ticketBaiData !== []) {
+            $data[$key] = $ticketBaiData;
+        }
+
+        $model->{$dataColumn} = array_replace($data, $metadata);
     }
 }

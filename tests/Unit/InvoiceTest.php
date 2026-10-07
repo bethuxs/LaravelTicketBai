@@ -94,3 +94,67 @@ test('get ticketbai payload reads from data key', function () {
     expect($payload['signature'])->toBe('chain-sig');
     expect($payload['territory'])->toBe('01');
 });
+
+test('get ticketbai payload reads legacy flattened data', function () {
+    $invoice = new Invoice;
+    $invoice->path = 'ticketbai/legacy.xml';
+    $invoice->data = [
+        'signature' => 'legacy-chain-sig',
+        'territory' => '02',
+        'status' => 'failed',
+    ];
+
+    $payload = Invoice::getTicketBaiPayload($invoice);
+
+    expect($payload)->toBe([
+        'signature' => 'legacy-chain-sig',
+        'path' => 'ticketbai/legacy.xml',
+        'territory' => '02',
+    ]);
+});
+
+test('merge ticketbai metadata preserves namespaced payload and other data', function () {
+    $invoice = new Invoice;
+    $invoice->data = [
+        'ticketbai' => [
+            'signature' => 'chain-sig',
+            'territory' => '01',
+        ],
+        'order_id' => 42,
+    ];
+
+    Invoice::mergeTicketBaiMetadata($invoice, [
+        'error' => 'Certificate expired',
+        'status' => 'failed',
+    ]);
+
+    expect($invoice->data)->toBe([
+        'ticketbai' => [
+            'signature' => 'chain-sig',
+            'territory' => '01',
+        ],
+        'order_id' => 42,
+        'error' => 'Certificate expired',
+        'status' => 'failed',
+    ]);
+});
+
+test('merge ticketbai metadata repairs legacy flattened payload', function () {
+    $invoice = new Invoice;
+    $invoice->data = [
+        'signature' => 'legacy-chain-sig',
+        'territory' => '03',
+        'error' => 'Old certificate error',
+        'status' => 'failed',
+    ];
+
+    Invoice::mergeTicketBaiMetadata($invoice, ['status' => 'sent']);
+
+    expect($invoice->data)->toMatchArray([
+        'ticketbai' => [
+            'signature' => 'legacy-chain-sig',
+            'territory' => '03',
+        ],
+        'status' => 'sent',
+    ]);
+});

@@ -146,10 +146,10 @@ class InvoiceSend implements ShouldQueue
             }
             
             if ($dataColumn !== null) {
-                $payload = Invoice::getTicketBaiPayload($invoice);
-                $payload['error'] = $e->getMessage();
-                $payload['status'] = 'failed';
-                $invoice->{$dataColumn} = $payload;
+                Invoice::mergeTicketBaiMetadata($invoice, [
+                    'error' => $e->getMessage(),
+                    'status' => 'failed',
+                ]);
             }
             
             if ($statusColumn !== null || $dataColumn !== null) {
@@ -177,9 +177,7 @@ class InvoiceSend implements ShouldQueue
             
             // Also store in data JSON for reference
             if ($dataColumn !== null) {
-                $payload = Invoice::getTicketBaiPayload($invoice);
-                $payload['status'] = 'sent';
-                $invoice->{$dataColumn} = $payload;
+                Invoice::mergeTicketBaiMetadata($invoice, ['status' => 'sent']);
             }
             
             // Save if at least one column was modified
@@ -222,11 +220,11 @@ class InvoiceSend implements ShouldQueue
                 
                 // Store in data JSON with duplicate indicator
                 if ($dataColumn !== null) {
-                    $payload = Invoice::getTicketBaiPayload($invoice);
-                    $payload['status'] = 'sent';
-                    $payload['duplicate'] = true;
-                    $payload['error'] = $result->content();
-                    $invoice->{$dataColumn} = $payload;
+                    Invoice::mergeTicketBaiMetadata($invoice, [
+                        'status' => 'sent',
+                        'duplicate' => true,
+                        'error' => $result->content(),
+                    ]);
                 }
                 
                 if ($sentColumn !== null || $statusColumn !== null || $dataColumn !== null) {
@@ -240,13 +238,13 @@ class InvoiceSend implements ShouldQueue
                 
                 $dataColumn = Invoice::getColumnName('data');
                 $statusColumn = Invoice::getColumnName('status');
-                $payload = Invoice::getTicketBaiPayload($invoice);
-                $payload['error'] = $info;
                 
                 // Save error to data column if it exists
                 if ($dataColumn !== null) {
-                    $payload['status'] = 'failed';
-                    $invoice->{$dataColumn} = $payload;
+                    Invoice::mergeTicketBaiMetadata($invoice, [
+                        'error' => $info,
+                        'status' => 'failed',
+                    ]);
                 }
                 // Mark as failed if status column exists
                 if ($statusColumn !== null) {
@@ -318,4 +316,3 @@ class InvoiceSend implements ShouldQueue
         return true;
     }
 }
-
