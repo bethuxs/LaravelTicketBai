@@ -17,6 +17,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 /**
  * InvoiceSend Job
@@ -44,15 +45,21 @@ use Illuminate\Support\Facades\Storage;
  *   - Completes job successfully (no retry - validation errors won't be fixed by retrying)
  *
  * - EXCEPTION:
- *   - Catches connection/certificate errors
- *   - Logs detailed error with XML content
- *   - Fails the job for retry (transient errors may resolve)
+ *   - Retries cURL timeouts with bounded backoff while preserving the signed XML
+ *   - Marks permanent connection/certificate errors as failed immediately
+ *   - Marks exhausted timeout retries as failed through the queue failure callback
  *
  * The invoice is never marked as 'sent' unless the API explicitly returns isCorrect = true or duplicate.
  */
 class InvoiceSend implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    /** @var int */
+    public $tries = 5;
+
+    /** @var list<int> */
+    public $backoff = [60, 300, 900, 1800];
 
     /**
      * Only the Invoice model is serialized, not the TicketBAI service.
@@ -128,33 +135,26 @@ class InvoiceSend implements ShouldQueue
             $api = $this->createApi($tbai, $test, $debug);
 
             $result = $api->submitInvoice($tbai, $privateKey, $certPassword);
-        } catch (\Throwable $e) {
-            // Exception path: Certificate, connection, or validation errors
+        } catch (Throwable $e) {
+            if ($this->isTransientTimeout($e)) {
+                Log::warning('TicketBAI invoice send timed out and will be retried', [
+                    'invoice_id' => $invoice->getKey(),
+                    'exception' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                ]);
+                $this->persistSendError($invoice, $e, 'pending');
+
+                throw $e;
+            }
+
             Log::error('TicketBAI invoice send failed', [
                 'invoice_id' => $invoice->getKey(),
                 'exception' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
             ]);
-
-            // Mark invoice as failed when exception occurs
-            $statusColumn = Invoice::getColumnName('status');
-            $dataColumn = Invoice::getColumnName('data');
-            
-            if ($statusColumn !== null) {
-                $invoice->{$statusColumn} = 'failed';
-            }
-            
-            if ($dataColumn !== null) {
-                Invoice::mergeTicketBaiMetadata($invoice, [
-                    'error' => $e->getMessage(),
-                    'status' => 'failed',
-                ]);
-            }
-            
-            if ($statusColumn !== null || $dataColumn !== null) {
-                $invoice->save();
-            }
+            $this->persistSendError($invoice, $e, 'failed');
 
             $this->fail($e);
             return;
@@ -260,6 +260,50 @@ class InvoiceSend implements ShouldQueue
                 // The error has been persisted and logged above.
                 return;
             }
+        }
+    }
+
+    public function failed(?Throwable $exception): void
+    {
+        if ($exception === null) {
+            return;
+        }
+
+        $invoice = $this->invoice->fresh() ?? $this->invoice;
+        $this->persistSendError($invoice, $exception, 'failed');
+    }
+
+    private function isTransientTimeout(Throwable $exception): bool
+    {
+        do {
+            if (preg_match('/cURL error\s*\(?28\)?(?!\d)/i', $exception->getMessage()) === 1) {
+                return true;
+            }
+
+            $exception = $exception->getPrevious();
+        } while ($exception instanceof Throwable);
+
+        return false;
+    }
+
+    private function persistSendError(Invoice $invoice, Throwable $exception, string $status): void
+    {
+        $statusColumn = Invoice::getColumnName('status');
+        $dataColumn = Invoice::getColumnName('data');
+
+        if ($statusColumn !== null) {
+            $invoice->{$statusColumn} = $status;
+        }
+
+        if ($dataColumn !== null) {
+            Invoice::mergeTicketBaiMetadata($invoice, [
+                'error' => $exception->getMessage(),
+                'status' => $status,
+            ]);
+        }
+
+        if ($statusColumn !== null || $dataColumn !== null) {
+            $invoice->save();
         }
     }
 

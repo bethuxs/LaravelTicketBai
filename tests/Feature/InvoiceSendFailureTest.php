@@ -85,6 +85,107 @@ test('api exception is logged and job fails', function () {
     Log::shouldHaveReceived('error')->atLeast()->once();
 });
 
+test('curl timeout is retried with backoff and stays pending', function (string $timeoutMessage) {
+    Log::spy();
+
+    $path = 'ticketbai/signed-timeout.xml';
+    $xmlContent = '<?xml version="1.0"?><T:TicketBai xmlns:T="urn:ticketbai:emision"/>';
+    Storage::disk('local')->put($path, $xmlContent);
+
+    $invoice = new Invoice();
+    $invoice->path = $path;
+    $invoice->issuer = 1;
+    $invoice->provider_reference = 'INV-TIMEOUT';
+    $invoice->status = 'pending';
+    $invoice->data = ['ticketbai' => ['territory' => '01']];
+    $invoice->save();
+
+    $ticketbai = Mockery::mock(TicketBAI::class);
+    $ticketbai->shouldReceive('getDisk')->andReturn('local');
+    $ticketbai->shouldReceive('getCertificate')
+        ->andReturn(Mockery::mock('Barnetik\\Tbai\\PrivateKey'));
+    $ticketbai->shouldReceive('getCertPassword')->andReturn('');
+    $job = new class($invoice) extends InvoiceSend {
+        private Api $apiMock;
+        private BarnetikTicketBai $tbaiMock;
+
+        public function setApiMock(Api $apiMock): self
+        {
+            $this->apiMock = $apiMock;
+
+            return $this;
+        }
+
+        public function setTbaiMock(BarnetikTicketBai $tbaiMock): self
+        {
+            $this->tbaiMock = $tbaiMock;
+
+            return $this;
+        }
+
+        protected function createApi(BarnetikTicketBai $tbai, bool $test, bool $debug): Api
+        {
+            return $this->apiMock;
+        }
+
+        protected function createTicketBaiFromXml(string $xmlContent, string $territory): BarnetikTicketBai
+        {
+            return $this->tbaiMock;
+        }
+    };
+
+    $timeout = new RuntimeException($timeoutMessage);
+    $apiMock = Mockery::mock(Api::class);
+    $apiMock->shouldReceive('submitInvoice')->once()->andThrow($timeout);
+    $job->setApiMock($apiMock)->setTbaiMock(Mockery::mock(BarnetikTicketBai::class));
+
+    $caught = null;
+    try {
+        $job->handle($ticketbai);
+    } catch (RuntimeException $exception) {
+        $caught = $exception;
+    }
+
+    $invoice->refresh();
+    expect($invoice->data['error'] ?? null)->toBe($timeout->getMessage())
+        ->and($caught)->toBe($timeout)
+        ->and($job->tries)->toBe(5)
+        ->and($job->backoff)->toBe([60, 300, 900, 1800])
+        ->and($invoice->status)->toBe('pending')
+        ->and($invoice->data)->toMatchArray([
+            'ticketbai' => ['territory' => '01'],
+            'error' => $timeout->getMessage(),
+            'status' => 'pending',
+        ]);
+
+    Log::shouldHaveReceived('warning')->once();
+})->with([
+    'Guzzle format' => 'cURL error 28: Operation timed out after 30001 milliseconds',
+    'legacy format' => 'Curl error(28): Operation timed out',
+]);
+
+test('exhausted curl timeout retries mark the invoice as failed', function () {
+    $invoice = new Invoice();
+    $invoice->path = 'ticketbai/signed-timeout-exhausted.xml';
+    $invoice->issuer = 1;
+    $invoice->provider_reference = 'INV-TIMEOUT-EXHAUSTED';
+    $invoice->status = 'pending';
+    $invoice->data = ['ticketbai' => ['territory' => '01']];
+    $invoice->save();
+
+    $timeout = new RuntimeException('cURL error 28: Operation timed out');
+    $job = new InvoiceSend($invoice);
+    $job->failed($timeout);
+
+    $invoice->refresh();
+    expect($invoice->status)->toBe('failed')
+        ->and($invoice->data)->toMatchArray([
+            'ticketbai' => ['territory' => '01'],
+            'error' => $timeout->getMessage(),
+            'status' => 'failed',
+        ]);
+});
+
 test('api error response marks invoice as failed', function () {
     Log::spy();
 
